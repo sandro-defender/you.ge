@@ -1,3 +1,12 @@
+<!--
+Project: You.Ge
+File: index.html
+Version: 2.4
+Author: Cursor AI
+Model: Claude Sonnet 4.5
+Last Modified: 2025-01-27
+Purpose: Clean visual landing page for You.Ge website with PWA support
+-->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -210,6 +219,77 @@
             100% { transform: rotate(360deg); }
         }
 
+        .version-badge {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+            animation-delay: 2s;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .version-badge:hover {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.05);
+        }
+
+        .version-badge.showing-sw {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .version-tooltip {
+            position: fixed;
+            bottom: 60px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            z-index: 1001;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 200px;
+        }
+
+        .version-tooltip.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .version-tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            right: 20px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid rgba(0, 0, 0, 0.9);
+        }
+
+        .version-badge::before {
+            content: 'v';
+            margin-right: 4px;
+            opacity: 0.7;
+        }
+
         @media (max-width: 768px) {
             .logo {
                 font-size: 3rem;
@@ -219,6 +299,12 @@
             }
             .description {
                 font-size: 1rem;
+            }
+            .version-badge {
+                bottom: 10px;
+                right: 10px;
+                font-size: 0.75rem;
+                padding: 6px 12px;
             }
         }
     </style>
@@ -242,7 +328,91 @@
         <button class="back-button" onclick="location.reload()">Go Back</button>
     </div>
 
+    <!-- Version Badge -->
+    <div class="version-badge" id="versionBadge">0.0</div>
+    <div class="version-tooltip" id="versionTooltip"></div>
+
     <script>
+        // Version Badge - Update version from version.js if available
+        (function() {
+            const versionBadge = document.getElementById('versionBadge');
+            const versionTooltip = document.getElementById('versionTooltip');
+            const defaultVersion = '0.0'; // Default version from HTML header
+            let appVersion = defaultVersion;
+            
+            // Try to get version from window.VERSION (set by version.js)
+            if (typeof window.VERSION !== 'undefined' && window.VERSION) {
+                appVersion = window.VERSION;
+                versionBadge.textContent = appVersion;
+            } else {
+                // Wait a bit for version.js to load, then check again
+                setTimeout(() => {
+                    if (typeof window.VERSION !== 'undefined' && window.VERSION) {
+                        appVersion = window.VERSION;
+                        versionBadge.textContent = appVersion;
+                    } else {
+                        versionBadge.textContent = appVersion;
+                    }
+                }, 100);
+            }
+
+            // Listen for service worker messages
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'SW_VERSION') {
+                        const swVersion = event.data.version || 'unknown';
+                        showVersionInfo(appVersion, swVersion);
+                    }
+                });
+            }
+
+            // Click handler to get service worker version
+            versionBadge.addEventListener('click', () => {
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    // Request version from service worker
+                    const messageChannel = new MessageChannel();
+                    
+                    messageChannel.port1.onmessage = (event) => {
+                        if (event.data && event.data.type === 'SW_VERSION') {
+                            const swVersion = event.data.version || 'unknown';
+                            showVersionInfo(appVersion, swVersion);
+                        }
+                    };
+
+                    navigator.serviceWorker.controller.postMessage(
+                        { type: 'GET_SW_VERSION' },
+                        [messageChannel.port2]
+                    );
+
+                    // Fallback: try direct message
+                    navigator.serviceWorker.controller.postMessage({ type: 'GET_SW_VERSION' });
+                    
+                    // Show loading state
+                    versionBadge.classList.add('showing-sw');
+                } else {
+                    // No service worker registered
+                    showVersionInfo(appVersion, 'not registered');
+                }
+            });
+
+            // Function to show version information
+            function showVersionInfo(appVer, swVer) {
+                versionTooltip.innerHTML = `
+                    <div style="margin-bottom: 6px;"><strong>App:</strong> v${appVer}</div>
+                    <div><strong>SW:</strong> ${swVer}</div>
+                `;
+                versionTooltip.classList.add('show');
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    versionTooltip.classList.remove('show');
+                    versionBadge.classList.remove('showing-sw');
+                }, 3000);
+            }
+
+            // Tooltip auto-hides after 3 seconds (handled in showVersionInfo)
+        })();
+
         // Button click handler - fade out welcome screen and show secondary content
         document.querySelector('.cta-button').addEventListener('click', function() {
             const container = document.querySelector('.container');
@@ -257,7 +427,48 @@
                 secondaryContent.classList.add('active');
             }, 500);
         });
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/workbox-service-worker.js')
+                    .then((registration) => {
+                        console.log('Service Worker registered successfully:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
     </script>
 </body>
 </html>
+
+<!--
+CHANGELOG
+[2025-01-27] v2.0 – Complete rewrite: Removed all uCoz scripts, tracking code, admin forms, and unnecessary dependencies. Kept only clean visual design with animations.
+Reason: To create a clean, minimal landing page without third-party dependencies.
+Thoughts: Page is now lightweight and fast-loading. All visual elements preserved with smooth animations.
+Model: Claude Sonnet 4.5
+
+[2025-01-27] v2.1 – Fixed "Explore Now" button functionality: Added fade-out animation and secondary content section that appears when button is clicked.
+Reason: Button was not working - only logging to console without any visual feedback.
+Thoughts: Now provides smooth transition with fade-out effect and shows secondary content. Added "Go Back" button to reload page.
+Model: Claude Sonnet 4.5
+
+[2025-01-27] v2.2 – Added Service Worker registration: Integrated workbox-service-worker.js for PWA caching functionality.
+Reason: To enable Progressive Web App features and offline caching capabilities.
+Thoughts: Service worker will cache resources for offline access and improve page load performance.
+Model: Claude Sonnet 4.5
+
+[2025-01-27] v2.3 – Added version badge: Display version number in bottom-right corner with smooth fade-in animation.
+Reason: To show current version of the application to users and developers.
+Thoughts: Badge is styled with glassmorphism effect, responsive design, and automatically reads version from version.js if available.
+Model: Claude Sonnet 4.5
+
+[2025-01-27] v2.4 – Made version badge clickable: Clicking the badge now displays both app version and service worker version in a tooltip.
+Reason: To allow users to check service worker version and verify PWA functionality.
+Thoughts: Badge changes color when clicked, shows tooltip with both versions, and auto-hides after 3 seconds. Service worker responds to version requests via message channel.
+Model: Claude Sonnet 4.5
+-->
 
