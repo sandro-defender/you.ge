@@ -1,0 +1,22 @@
+
+{
+  "version": 1,
+  "include": [
+    "/bar",
+    "/shift", 
+    "/instructions",
+    "/salary",
+    "/tip",
+    "/tip2",
+    "/galery",
+    "/statistics",
+    "/statistics2",
+    "/marge",
+    "/404",
+    "/403",
+    "/500"
+  ],
+  "exclude": [
+    "/74.125.0.0/16"
+  ]
+}
