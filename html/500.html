@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>405 - გვერდი ვერ მოიძებნა</title>
+    <style>
+        body {
+            background: black;
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Noto Sans Georgian', sans-serif;
+            color: #00ff9d;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            opacity: 0.8;
+        }
+
+        .content {
+            position: relative;
+            z-index: 2;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 0 30px rgba(0, 255, 157, 0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        h1 {
+            font-size: 120px;
+            margin: 0;
+            text-shadow: 0 0 20px #00ff9d;
+            font-weight: 700;
+            letter-spacing: 5px;
+            animation: glitch 3s infinite;
+        }
+
+        p {
+            font-size: 28px;
+            margin: 30px 0;
+            text-shadow: 0 0 10px #00ff9d;
+            opacity: 0.9;
+        }
+
+        a {
+            color: #00ff9d;
+            text-decoration: none;
+            border: 2px solid #00ff9d;
+            padding: 15px 30px;
+            border-radius: 50px;
+            transition: all 0.4s ease;
+            font-size: 18px;
+            display: inline-block;
+            margin-top: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        a:hover {
+            background: #00ff9d;
+            color: black;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0, 255, 157, 0.4);
+        }
+
+        @keyframes glitch {
+            0% {
+                text-shadow: 0 0 20px #00ff9d;
+            }
+            25% {
+                text-shadow: -2px 0 #ff00de, 2px 2px #00ff9d;
+            }
+            50% {
+                text-shadow: 2px -2px #ff00de, -2px 2px #00ff9d;
+            }
+            75% {
+                text-shadow: -2px 2px #ff00de, 2px -2px #00ff9d;
+            }
+            100% {
+                text-shadow: 0 0 20px #00ff9d;
+            }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix"></canvas>
+    <div class="content">
+        <h1>500</h1>
+        <p>სერვერზე შეცდომაა</p>
+        <a href="/">მთავარ გვერდზე დაბრუნება</a>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const katakana = 'აბგდევზთიკლმნოპჟრსტუფქღყშჩცძწჭხჯჰ1234567890!@#$%^&*()'.split('');
+        const fontSize = 18;
+        const columns = canvas.width/fontSize;
+
+        const drops = [];
+        for(let x = 0; x < columns; x++) {
+            drops[x] = 1;
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = '#00ff9d';
+            ctx.font = `${fontSize}px "Noto Sans Georgian"`;
+
+            for(let i = 0; i < drops.length; i++) {
+                const text = katakana[Math.floor(Math.random() * katakana.length)];
+                const opacity = Math.random() * 0.5 + 0.5;
+                ctx.fillStyle = `rgba(0, 255, 157, ${opacity})`;
+                ctx.fillText(text, i*fontSize, drops[i]*fontSize);
+
+                if(drops[i]*fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+
+                drops[i]++;
+            }
+        }
+
+        setInterval(draw, 33);
+
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+    </script>
+</body>
+</html>
+
+

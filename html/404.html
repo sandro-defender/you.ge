@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Matrix</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: -1;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: #0f0;
+            text-align: center;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 8em;
+            text-shadow: 0 0 10px #0f0;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 1.5em;
+            margin-bottom: 30px;
+            max-width: 600px;
+            padding: 0 20px;
+        }
+
+        a {
+            color: #0f0;
+            text-decoration: none;
+            border: 2px solid #0f0;
+            padding: 10px 20px;
+            transition: all 0.3s;
+        }
+
+        a:hover {
+            background-color: #0f0;
+            color: #000;
+        }
+
+        /* გლიჭის ეფექტისთვის */
+        .container::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(
+                0deg,
+                rgba(0, 255, 0, 0.2) 0%,
+                transparent 100%
+            );
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="matrix"></canvas>
+    
+    <div class="container">
+        <h1>404</h1>
+        <p>თქვენ მოხვედით სივრცეში, სადაც მხოლოდ კოდი არსებობს...</p>
+        <a href="/">დაბრუნება მატრიცაში</a>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('matrix');
+        const ctx = canvas.getContext('2d');
+
+        // კანვასის ზომების დაყენება
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // მატრიცის სიმბოლოები
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%^&*()';
+        const fontSize = 14;
+        const columns = Math.floor(canvas.width / fontSize);
+        const drops = [];
+
+        // საწყისი პოზიციები
+        for (let i = 0; i < columns; i++) {
+            drops[i] = 1;
+        }
+
+        // ანიმაციის ფუნქცია
+        function draw() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#0f0';
+            ctx.font = fontSize + 'px monospace';
+
+            for (let i = 0; i < drops.length; i++) {
+                const text = chars[Math.floor(Math.random() * chars.length)];
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
+                    drops[i] = 0;
+                }
+                drops[i]++;
+            }
+        }
+
+        // ანიმაციის დაწყება
+        setInterval(draw, 50);
+    </script>
+</body>
+</html>

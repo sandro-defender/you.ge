@@ -5,13 +5,6 @@
 /api/*    /api/:splat    200
 
 # Route redirects from original Apache config
-/bar    /html/bar.html    200
-/shift    /html/shift.html    200
-/instructions    /html/instructions.html    200
-/salary    /html/salary.html    200
-/tip    /html/tip.html    200
-/galery    /html/galery.html    200
-/statistics    /html/statistics.html    200
 /404    /html/404.html    200
 /403    /html/403.html    200
 /500    /html/500.html    200

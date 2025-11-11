@@ -57,14 +57,6 @@
  // ფაილების სია წინასწარი კეშირებისთვის
  const filesToPrecache = [
    { url: '/manifest.json', revision: VERSION },
-   { url: '/includes/menu.html', revision: VERSION },
-   { url: '/includes/head.html', revision: VERSION },
-   { url: '/js/install-helper.js', revision: VERSION },
-   { url: '/tip', revision: VERSION },
-   { url: '/statistics', revision: VERSION },
-   { url: '/shift', revision: VERSION },
-   { url: '/salary', revision: VERSION },
-   { url: '/bar', revision: VERSION },
  
  
    // CDN-ფაილები
@@ -390,8 +382,8 @@ self.addEventListener('push', (event) => {
     const options = {
       body,
       data,
-      icon: '/icon/logo3/icon-512.png',
-      badge: '/icon/logo3/icon-180.png',
+      icon: '/img/icon/icon.png',
+      badge: '/img/icon/icon.png',
       vibrate: [100, 50, 100]
     };
     return self.registration.showNotification(title, options);
