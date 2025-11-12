@@ -40,7 +40,8 @@
 
         body {
             overflow: hidden;
-            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            background: url('/img/gif/georgia.gif') center center / cover no-repeat fixed;
+            background-color: #000;
             height: 100vh;
             position: relative;
         }
@@ -321,7 +322,7 @@
     </div>
 
     <!-- Version Badge -->
-    <div class="version-badge" id="versionBadge">0.0</div>
+    <div class="version-badge" id="versionBadge">0.1</div>
     <div class="version-tooltip" id="versionTooltip"></div>
 
     <script>
@@ -329,7 +330,7 @@
         (function() {
             const versionBadge = document.getElementById('versionBadge');
             const versionTooltip = document.getElementById('versionTooltip');
-            const defaultVersion = '0.0'; // Default version from HTML header
+            const defaultVersion = '0.1'; // Default version from HTML header
             let appVersion = defaultVersion;
             
             // Try to get version from window.VERSION (set by version.js)
@@ -432,6 +433,9 @@
                     });
             });
         }
+
+        // --- Changelog ---
+        // 2025-11-12: Added animated Georgia background and bumped default version. (auto)
     </script>
 </body>
 </html>
