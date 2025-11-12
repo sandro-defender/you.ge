@@ -101,9 +101,16 @@
             width: 160px;
             height: auto;
             display: block;
-            margin: 0 auto 2rem;
             border-radius: 24px;
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        .georgia-banner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
         }
 
         .cta-button:hover {
@@ -313,8 +320,11 @@
 <body>
     <div class="container">
         <div class="logo-container">
-            <img class="hero-image" src="/img/gif/georgia.gif" alt="Animated landscape of Georgia">
-            <div class="georgia-flag">🇬🇪</div>
+            <div class="georgia-banner">
+                <span class="georgia-flag" aria-hidden="true">🇬🇪</span>
+                <img class="hero-image" src="/img/gif/georgia.gif" alt="Animated landscape of Georgia">
+                <span class="georgia-flag" aria-hidden="true">🇬🇪</span>
+            </div>
             <h1 class="logo">You.Ge</h1>
         </div>
         <h2 class="welcome-text">Welcome to You.Ge</h2>
@@ -445,4 +455,6 @@
     </script>
 </body>
 </html>
+// --- Changelog ---
+// 2025-11-12: Repositioned hero gif between animated flags. (auto)
 
