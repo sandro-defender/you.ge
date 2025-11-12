@@ -40,8 +40,7 @@
 
         body {
             overflow: hidden;
-            background: url('/img/gif/georgia.gif') center center / cover no-repeat fixed;
-            background-color: #000;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
             height: 100vh;
             position: relative;
         }
@@ -96,6 +95,15 @@
             opacity: 0;
             animation: fadeIn 1s ease-out forwards;
             animation-delay: 1.5s;
+        }
+
+        .hero-image {
+            width: 160px;
+            height: auto;
+            display: block;
+            margin: 0 auto 2rem;
+            border-radius: 24px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
         }
 
         .cta-button:hover {
@@ -305,6 +313,7 @@
 <body>
     <div class="container">
         <div class="logo-container">
+            <img class="hero-image" src="/img/georgia.gif" alt="Animated landscape of Georgia">
             <div class="georgia-flag">🇬🇪</div>
             <h1 class="logo">You.Ge</h1>
         </div>
@@ -433,9 +442,8 @@
                     });
             });
         }
-
-        // --- Changelog ---
-        // 2025-11-12: Added animated Georgia background and bumped default version. (auto)
     </script>
 </body>
 </html>
+// --- Changelog ---
+// 2025-11-12: Added hero image and bumped default version display. (auto)
