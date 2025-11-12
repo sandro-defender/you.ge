@@ -1,12 +1,4 @@
-<!--
-Project: You.Ge
-File: index.html
-Version: 2.4
-Author: Cursor AI
-Model: Claude Sonnet 4.5
-Last Modified: 2025-01-27
-Purpose: Clean visual landing page for You.Ge website with PWA support
--->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -443,32 +435,3 @@ Purpose: Clean visual landing page for You.Ge website with PWA support
     </script>
 </body>
 </html>
-
-<!--
-CHANGELOG
-[2025-01-27] v2.0 – Complete rewrite: Removed all uCoz scripts, tracking code, admin forms, and unnecessary dependencies. Kept only clean visual design with animations.
-Reason: To create a clean, minimal landing page without third-party dependencies.
-Thoughts: Page is now lightweight and fast-loading. All visual elements preserved with smooth animations.
-Model: Claude Sonnet 4.5
-
-[2025-01-27] v2.1 – Fixed "Explore Now" button functionality: Added fade-out animation and secondary content section that appears when button is clicked.
-Reason: Button was not working - only logging to console without any visual feedback.
-Thoughts: Now provides smooth transition with fade-out effect and shows secondary content. Added "Go Back" button to reload page.
-Model: Claude Sonnet 4.5
-
-[2025-01-27] v2.2 – Added Service Worker registration: Integrated workbox-service-worker.js for PWA caching functionality.
-Reason: To enable Progressive Web App features and offline caching capabilities.
-Thoughts: Service worker will cache resources for offline access and improve page load performance.
-Model: Claude Sonnet 4.5
-
-[2025-01-27] v2.3 – Added version badge: Display version number in bottom-right corner with smooth fade-in animation.
-Reason: To show current version of the application to users and developers.
-Thoughts: Badge is styled with glassmorphism effect, responsive design, and automatically reads version from version.js if available.
-Model: Claude Sonnet 4.5
-
-[2025-01-27] v2.4 – Made version badge clickable: Clicking the badge now displays both app version and service worker version in a tooltip.
-Reason: To allow users to check service worker version and verify PWA functionality.
-Thoughts: Badge changes color when clicked, shows tooltip with both versions, and auto-hides after 3 seconds. Service worker responds to version requests via message channel.
-Model: Claude Sonnet 4.5
--->
-
