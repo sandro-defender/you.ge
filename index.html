@@ -27,8 +27,6 @@
     <!-- ios splash screens -->
     <link rel="apple-touch-startup-image" href="/img/icon/icon.png">
     
-    <!-- Version Information -->
-    <script src="/version.js"></script>
     <style>
         * {
             margin: 0;
@@ -499,18 +497,21 @@
             retina_detect: true
         });
 
-        // Version Badge - Update version from version.js if available
+        // Version Badge - App version defined inline
         (function() {
             const versionBadge = document.getElementById('versionBadge');
             const versionTooltip = document.getElementById('versionTooltip');
-            const defaultVersion = '0.1'; // Default version from HTML header
-            let appVersion = defaultVersion;
+            // App version defined inline in page code
+            const appVersion = '1.0';
             let swVersion = '...';
             
             // Function to update badge display
             function updateBadgeDisplay() {
                 versionBadge.textContent = `v${appVersion} / SW: ${swVersion}`;
             }
+            
+            // Initialize badge with app version
+            updateBadgeDisplay();
             
             // Function to get service worker version
             function getServiceWorkerVersion() {
@@ -536,22 +537,6 @@
                     swVersion = 'none';
                     updateBadgeDisplay();
                 }
-            }
-            
-            // Try to get version from window.VERSION (set by version.js)
-            if (typeof window.VERSION !== 'undefined' && window.VERSION) {
-                appVersion = window.VERSION;
-                updateBadgeDisplay();
-            } else {
-                // Wait a bit for version.js to load, then check again
-                setTimeout(() => {
-                    if (typeof window.VERSION !== 'undefined' && window.VERSION) {
-                        appVersion = window.VERSION;
-                        updateBadgeDisplay();
-                    } else {
-                        updateBadgeDisplay();
-                    }
-                }, 100);
             }
 
             // Get service worker version on load
@@ -672,4 +657,5 @@
 2025-01-27: Added meta tags, service worker registration, and version badge functionality from index.html. (auto)
 2025-01-27: Replaced CSS-based flag with SVG image from Flag_of_Georgia.svg. (auto)
 2025-01-27: Enhanced service worker to check for updates on every page load, visibility change, and periodically. Automatically reloads page when new version is available. (auto)
-2025-01-27: Updated version badge to display both app version and service worker version simultaneously. (auto) -->
+2025-01-27: Updated version badge to display both app version and service worker version simultaneously. (auto)
+2025-01-27: Removed external version.js file and moved app version definition inline in page code. (auto) -->
