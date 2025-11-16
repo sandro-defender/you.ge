@@ -629,8 +629,10 @@
                 // Check version on load
                 checkAppVersion();
                 
-                // Register Service Worker
-                navigator.serviceWorker.register('/workbox-service-worker.js')
+                // Register Service Worker with updateViaCache: 'none' to always check for updates
+                navigator.serviceWorker.register('/workbox-service-worker.js', {
+                    updateViaCache: 'none'
+                })
                     .then(registration => {
                         console.log('Service Worker registered:', registration);
                         

@@ -16,8 +16,17 @@ const EXCLUDED_URLS = [
   'cloudflare.com/beacon',
   'analytics',
   'beacon',
-  'tracking'
+  'tracking',
+  'gtag',
+  'ga.js',
+  'analytics.js'
 ];
+
+// Helper function to check if URL should be excluded
+function isExcludedUrl(url) {
+  const urlString = typeof url === 'string' ? url : url.href;
+  return EXCLUDED_URLS.some(excludedUrl => urlString.includes(excludedUrl));
+}
 
 // ჩართვა განვითარების რეჟიმში
 workbox.setConfig({ debug: false });
@@ -68,6 +77,21 @@ const filesToPrecache = [
 // წინასწარი კეშირება
 precacheAndRoute(filesToPrecache);
 
+// Global fetch handler to catch excluded URLs before route handlers
+self.addEventListener('fetch', (event) => {
+  // Check if this is an excluded URL and handle it directly
+  if (isExcludedUrl(event.request.url)) {
+    // For excluded URLs, just fetch from network, don't cache
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // Silently fail for analytics/beacon requests
+        return new Response('', { status: 200, statusText: 'OK' });
+      })
+    );
+  }
+  // Let other routes handle non-excluded URLs
+});
+
 // Service Worker-ის დაყენების დამუშავება
 self.addEventListener('install', (event) => {
   // გამოვტოვებთ ლოდინს და ახალ Service Worker-ს დაუყოვნებლივ ვაქტივირებთ
@@ -98,9 +122,17 @@ self.addEventListener('activate', (event) => {
 
 // მითითებული URL-ების კეშირებიდან გამორიცხვა (მკაცრად ქსელი, კეშის გარეშე)
 // Use NetworkOnly strategy - these URLs should never be cached
+// This MUST be registered FIRST to catch excluded URLs before other routes
 registerRoute(
-  ({ url }) => EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl)),
-  new NetworkOnly()
+  ({ url }) => isExcludedUrl(url),
+  new NetworkOnly({
+    plugins: [{
+      fetchDidFail: async () => {
+        // Silently handle failures for excluded URLs
+        return null;
+      }
+    }]
+  })
 );
 
 // StaleWhileRevalidate სტრატეგია index.html-ისთვის
@@ -142,12 +174,12 @@ registerRoute(
 // StaleWhileRevalidate სტრატეგია JavaScript და CSS ფაილებისთვის
 registerRoute(
   ({ request, url }) => {
-    // Exclude analytics, beacons, and tracking scripts
-    const isExcluded = EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl));
+    // Exclude analytics, beacons, and tracking scripts - double check
+    if (isExcludedUrl(url)) return false;
     const isStaticResource = request.destination === 'script' || 
                              request.destination === 'style' ||
                              url.pathname.match(/\.(js|css|mjs)$/i);
-    return !isExcluded && isStaticResource;
+    return isStaticResource;
   },
   new StaleWhileRevalidate({
     cacheName: 'static-resources-' + VERSION,
@@ -166,11 +198,11 @@ registerRoute(
 // NetworkFirst სტრატეგია API მოთხოვნებისთვის (JSON, XML)
 registerRoute(
   ({ request, url }) => {
-    const isExcluded = EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl));
+    if (isExcludedUrl(url)) return false;
     const isAPI = request.destination === 'empty' && 
                   (url.pathname.match(/\.(json|xml)$/i) || 
                    url.pathname.startsWith('/api/'));
-    return !isExcluded && isAPI;
+    return isAPI;
   },
   new NetworkFirst({
     cacheName: 'api-cache-' + VERSION,
@@ -189,11 +221,11 @@ registerRoute(
 // CacheFirst სტრატეგია სურათებისთვის (PNG, JPEG, GIF, SVG, WebP)
 registerRoute(
   ({ request, url }) => {
-    // Exclude analytics and tracking images
-    const isExcluded = EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl));
+    // Exclude analytics and tracking images - double check
+    if (isExcludedUrl(url)) return false;
     const isImage = request.destination === 'image' || 
                     url.pathname.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i);
-    return !isExcluded && isImage;
+    return isImage;
   },
   new CacheFirst({
     cacheName: 'images-cache-' + VERSION,
@@ -212,10 +244,10 @@ registerRoute(
 // CacheFirst სტრატეგია ფონტებისთვის
 registerRoute(
   ({ request, url }) => {
-    const isExcluded = EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl));
+    if (isExcludedUrl(url)) return false;
     const isFont = request.destination === 'font' || 
                    url.pathname.match(/\.(woff|woff2|ttf|otf|eot)$/i);
-    return !isExcluded && isFont;
+    return isFont;
   },
   new CacheFirst({
     cacheName: 'fonts-cache-' + VERSION,
@@ -286,5 +318,10 @@ Model: Claude Sonnet 4.5
 [2025-01-27] v2.3 – Enhanced service worker to support all file types: Added support for fonts, SVG files, API requests, improved message handling (GET_VERSION, SKIP_WAITING), added offline fallback, expanded precache list, and improved cache cleanup. Service worker now notifies clients when activated.
 Reason: Ensure service worker supports all resources used by the application including fonts, SVGs, and all message types from index.html integration.
 Thoughts: Comprehensive caching strategy ensures all assets are properly cached while maintaining performance. Added support for all message handlers needed by the page integration.
+Model: Claude Sonnet 4.5
+
+[2025-01-27] v2.4 – Fixed Cloudflare Insights caching issue: Added global fetch handler to intercept excluded URLs before Workbox routes, improved exclusion helper function, added double-check exclusion in all routes, and improved error handling for network failures. This prevents analytics/beacon scripts from being cached and eliminates IndexedDB errors.
+Reason: Cloudflare Insights beacon script was still being caught by StaleWhileRevalidate strategy causing network errors and IndexedDB transaction errors.
+Thoughts: Global fetch handler ensures excluded URLs are handled directly without going through Workbox routes, preventing caching attempts and IndexedDB errors. All routes now double-check exclusions for safety.
 Model: Claude Sonnet 4.5
 */
