@@ -583,72 +583,92 @@
             });
         })();
 
-        // Service Worker Registration with Update Check
+        // Early Service Worker Registration and Version Check
         if ('serviceWorker' in navigator) {
-            let serviceWorkerRegistration = null;
-            
-            window.addEventListener('load', () => {
+            // Check app version (using inline version from version badge code)
+            async function checkAppVersion() {
+                try {
+                    // Get version from version badge (defined above)
+                    const versionBadge = document.getElementById('versionBadge');
+                    let currentVersion = '1.1'; // Default fallback
+                    if (versionBadge) {
+                        // Extract version from badge text (format: "v1.1 / SW: ...")
+                        const badgeText = versionBadge.textContent || '';
+                        const versionMatch = badgeText.match(/v([\d.]+)/);
+                        if (versionMatch) {
+                            currentVersion = versionMatch[1];
+                        }
+                    }
+                    const storedVersion = localStorage.getItem('app-version');
+                    
+                    // If version changed or this is first installation
+                    if (storedVersion !== currentVersion) {
+                        // Update version in localStorage
+                        localStorage.setItem('app-version', currentVersion);
+                        
+                        // If this is not the first installation, show notification
+                        if (storedVersion) {
+                            if (confirm('ხელმისაწვდომია ახალი ვერსია. გსურთ განახლება?')) {
+                                // Clear cache and reload page
+                                if ('caches' in window) {
+                                    const cacheNames = await caches.keys();
+                                    await Promise.all(
+                                        cacheNames.map(name => caches.delete(name))
+                                    );
+                                }
+                                window.location.reload(true);
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error checking version:', error);
+                }
+            }
+
+            window.addEventListener('load', function() {
+                // Check version on load
+                checkAppVersion();
+                
+                // Register Service Worker
                 navigator.serviceWorker.register('/workbox-service-worker.js')
-                    .then((registration) => {
-                        serviceWorkerRegistration = registration;
-                        console.log('Service Worker registered successfully:', registration.scope);
+                    .then(registration => {
+                        console.log('Service Worker registered:', registration);
                         
-                        // Check for updates on every page load
-                        checkForUpdates(registration);
-                        
-                        // Listen for updates
+                        // Check for Service Worker updates
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
-                            
-                            if (newWorker) {
-                                newWorker.addEventListener('statechange', () => {
-                                    if (newWorker.state === 'installed') {
-                                        if (navigator.serviceWorker.controller) {
-                                            // New service worker is available
-                                            console.log('New service worker available, activating...');
-                                            
-                                            // Wait for the new service worker to activate
-                                            newWorker.addEventListener('statechange', () => {
-                                                if (newWorker.state === 'activated') {
-                                                    // Reload the page to use the new service worker
-                                                    console.log('New service worker activated, reloading page...');
-                                                    window.location.reload();
-                                                }
-                                            });
-                                        } else {
-                                            // First time installation
-                                            console.log('Service Worker installed for the first time');
-                                        }
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // Show update notification
+                                    if (confirm('ხელმისაწვდომია ახალი ვერსია. გსურთ განახლება?')) {
+                                        newWorker.postMessage({ type: 'SKIP_WAITING' });
+                                        window.location.reload();
                                     }
-                                });
-                            }
+                                }
+                            });
                         });
-                        
-                        // Periodic update check (every 60 seconds)
-                        setInterval(() => {
-                            if (serviceWorkerRegistration) {
-                                checkForUpdates(serviceWorkerRegistration);
-                            }
-                        }, 60000);
+
+                        // Handle Service Worker version
+                        if (navigator.serviceWorker.controller) {
+                            navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' });
+                        } else {
+                            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                                navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' });
+                            });
+                        }
                     })
-                    .catch((error) => {
+                    .catch(error => {
                         console.error('Service Worker registration failed:', error);
                     });
-            });
-            
-            // Check for updates when page becomes visible again
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden && serviceWorkerRegistration) {
-                    checkForUpdates(serviceWorkerRegistration);
-                }
-            });
-            
-            // Function to check for service worker updates
-            function checkForUpdates(registration) {
-                registration.update().catch((error) => {
-                    console.error('Error checking for service worker updates:', error);
+
+                // Handle messages from Service Worker (version info goes to version badge)
+                navigator.serviceWorker.addEventListener('message', event => {
+                    if (event.data && event.data.version) {
+                        // Version badge will handle this via its own message listener
+                        console.log('Service Worker version:', event.data.version);
+                    }
                 });
-            }
+            });
         }
     </script>
 </body>
@@ -658,4 +678,5 @@
 2025-01-27: Replaced CSS-based flag with SVG image from Flag_of_Georgia.svg. (auto)
 2025-01-27: Enhanced service worker to check for updates on every page load, visibility change, and periodically. Automatically reloads page when new version is available. (auto)
 2025-01-27: Updated version badge to display both app version and service worker version simultaneously. (auto)
-2025-01-27: Removed external version.js file and moved app version definition inline in page code. (auto) -->
+2025-01-27: Removed external version.js file and moved app version definition inline in page code. (auto)
+2025-01-27: Updated service worker integration from index-sw.html (without push notifications). Added app version checking and update notifications. (auto) -->
