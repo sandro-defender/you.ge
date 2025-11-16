@@ -11,7 +11,7 @@
   "screenshots": [
     {
       "src": "/img/logo/logo.jpeg",
-      "sizes": "1080x1080",
+      "sizes": "1024x1024",
       "type": "image/png",
       "form_factor": "narrow"
     }
@@ -19,13 +19,13 @@
   "icons": [
     {
       "src": "/img/icon/icon.png",
-      "sizes": "512x512",
+      "sizes": "256x256",
       "type": "image/png",
       "purpose": "any"
     },
     {
       "src": "/img/icon/icon.png",
-      "sizes": "512x512",
+      "sizes": "256x256",
       "type": "image/png",
       "purpose": "maskable"
     }
