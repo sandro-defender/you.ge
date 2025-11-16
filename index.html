@@ -4,16 +4,18 @@
     <meta charset="UTF-8">
     <title>You.Ge - Welcome</title>
     <link rel="manifest" href="/manifest.json">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  <!-- , viewport-fit=cover"> (for fullscreen) -->
     <meta name="theme-color" content="#000000">
     
-    <link rel="icon" href="/img/icon/icon.png" type="image/png">
+    <link rel="icon" href="/img/icon/icon.png" type="image/png">   <!--ios app image only! -->
     <link rel="apple-touch-icon-precomposed" href="/img/icon/icon.png">
     <link rel="apple-touch-icon" sizes="256x256" href="/img/icon/icon.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/img/icon/icon.png">
     
+    <!--for windows--> 
     <meta content="/img/icon/icon.png" name="msapplication-TileImage">
     
+    <!-- ios meta -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Iveria Staff">
     <meta name="mobile-web-app-capable" content="yes" />
@@ -21,11 +23,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
     
+    
+    <!-- ios splash screens -->
     <link rel="apple-touch-startup-image" href="/img/icon/icon.png">
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-
         * {
             margin: 0;
             padding: 0;
@@ -33,121 +35,69 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0a;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             overflow: hidden;
             position: relative;
-            color: #fff;
-        }
-
-        /* Animated gradient background */
-        .gradient-bg {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(45deg, #667eea, #764ba2, #f093fb, #4facfe);
-            background-size: 400% 400%;
-            animation: gradientMove 15s ease infinite;
-            opacity: 0.1;
-            z-index: 0;
-        }
-
-        @keyframes gradientMove {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        /* Mesh gradient overlay */
-        .mesh-gradient {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: 
-                radial-gradient(at 20% 30%, rgba(102, 126, 234, 0.15) 0px, transparent 50%),
-                radial-gradient(at 80% 70%, rgba(118, 75, 162, 0.15) 0px, transparent 50%),
-                radial-gradient(at 50% 50%, rgba(240, 147, 251, 0.1) 0px, transparent 50%);
-            filter: blur(40px);
-            z-index: 0;
         }
 
         #particles-js {
             position: absolute;
             width: 100%;
             height: 100%;
-            z-index: 1;
+            z-index: 0;
         }
 
         .container {
             text-align: center;
-            background: rgba(255, 255, 255, 0.03);
-            padding: 80px 60px;
-            border-radius: 32px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 
-                0 20px 60px rgba(0, 0, 0, 0.4),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            max-width: 700px;
-            z-index: 2;
-            position: relative;
-            backdrop-filter: blur(20px) saturate(180%);
-            -webkit-backdrop-filter: blur(20px) saturate(180%);
-            animation: containerAppear 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: rgba(20, 20, 30, 0.1);
+            padding: 60px 40px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+                        0 0 100px rgba(102, 126, 234, 0.1);
+            max-width: 600px;
+            z-index: 1;
+            animation: fadeInScale 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            backdrop-filter: blur(15px) saturate(150%);
+            -webkit-backdrop-filter: blur(15px) saturate(150%);
         }
 
-        @keyframes containerAppear {
+        @keyframes fadeInScale {
             from {
                 opacity: 0;
-                transform: scale(0.9) translateY(40px);
-                filter: blur(10px);
+                transform: scale(0.8) translateY(30px);
             }
             to {
                 opacity: 1;
                 transform: scale(1) translateY(0);
-                filter: blur(0);
             }
         }
 
         .flag-container {
-            position: relative;
-            margin: 0 auto 50px;
-            width: 160px;
-            height: 120px;
+            perspective: 1000px;
+            margin: 0 auto 40px;
+            width: 140px;
+            height: 100px;
             display: flex;
             justify-content: center;
             align-items: center;
         }
 
-        .flag-glow {
-            position: absolute;
-            width: 180px;
-            height: 140px;
-            background: radial-gradient(circle, rgba(220, 38, 38, 0.3), transparent 70%);
-            filter: blur(30px);
-            animation: glowPulse 3s ease-in-out infinite;
-        }
-
-        @keyframes glowPulse {
-            0%, 100% { opacity: 0.5; transform: scale(1); }
-            50% { opacity: 0.8; transform: scale(1.1); }
-        }
-
         .flag {
-            width: 160px;
-            height: 120px;
-            border-radius: 16px;
+            width: 140px;
+            height: 100px;
+            margin: 0 auto;
+            border-radius: 12px;
             overflow: hidden;
-            box-shadow: 
-                0 15px 45px rgba(220, 38, 38, 0.4),
-                0 5px 15px rgba(0, 0, 0, 0.3);
-            animation: flagHover 4s ease-in-out infinite;
-            position: relative;
-            z-index: 1;
-            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(255, 0, 0, 0.3);
+            animation: flagFloat 4s ease-in-out infinite;
+            transform-style: preserve-3d;
         }
 
         .flag img {
@@ -157,237 +107,256 @@
             display: block;
         }
 
-        @keyframes flagHover {
+        @keyframes flagFloat {
             0%, 100% {
-                transform: translateY(0) rotateY(0);
+                transform: translateY(0px) rotateY(0deg);
             }
             25% {
-                transform: translateY(-8px) rotateY(-3deg);
+                transform: translateY(-10px) rotateY(-5deg);
             }
             50% {
-                transform: translateY(0) rotateY(0);
+                transform: translateY(0px) rotateY(0deg);
             }
             75% {
-                transform: translateY(-8px) rotateY(3deg);
+                transform: translateY(-10px) rotateY(5deg);
             }
         }
 
         .title {
-            font-size: 4em;
-            font-weight: 800;
+            font-size: 3em;
             color: #fff;
-            margin-bottom: 20px;
-            background: linear-gradient(135deg, #fff 0%, #667eea 50%, #764ba2 100%);
+            margin-bottom: 30px;
+            font-weight: bold;
+            background: linear-gradient(45deg, #667eea, #764ba2, #667eea);
             background-size: 200% auto;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            animation: titleGradient 4s ease infinite;
-            letter-spacing: -0.02em;
-            line-height: 1.1;
+            animation: gradientShift 3s ease infinite;
+            text-shadow: 0 0 30px rgba(102, 126, 234, 0.5);
         }
 
-        @keyframes titleGradient {
-            0%, 100% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-        }
-
-        .subtitle {
-            font-size: 1.1em;
-            color: rgba(255, 255, 255, 0.5);
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.3em;
-            margin-bottom: 40px;
-            animation: subtitleFade 2s ease-in-out infinite;
-        }
-
-        @keyframes subtitleFade {
-            0%, 100% { opacity: 0.5; }
-            50% { opacity: 1; }
+        @keyframes gradientShift {
+            0%, 100% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
         }
 
         .message {
-            font-size: 1.4em;
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 20px;
-            line-height: 1.6;
-            font-weight: 400;
+            font-size: 1.3em;
+            color: #b8b8b8;
+            margin-bottom: 15px;
+            line-height: 1.8;
+            animation: messageFloat 2.5s ease-in-out infinite;
         }
 
-        .message-highlight {
-            color: #667eea;
-            font-weight: 600;
+        @keyframes messageFloat {
+            0%, 100% {
+                transform: translateY(0);
+                opacity: 0.9;
+            }
+            50% {
+                transform: translateY(-5px);
+                opacity: 1;
+            }
         }
 
-        .loader-section {
-            margin: 60px auto 40px;
+        .spinner-container {
+            margin: 50px auto 30px;
             display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 30px;
-        }
-
-        .orbs-container {
-            display: flex;
-            gap: 12px;
             justify-content: center;
             align-items: center;
-            height: 60px;
+            gap: 8px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(102, 126, 234, 0.2);
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .orbs {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            height: 50px;
         }
 
         .orb {
-            width: 14px;
-            height: 14px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 12px;
+            height: 12px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
             border-radius: 50%;
-            animation: orbBounce 1.4s ease-in-out infinite;
-            box-shadow: 0 0 25px rgba(102, 126, 234, 0.8);
-            position: relative;
-        }
-
-        .orb::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 20px;
-            height: 20px;
-            background: inherit;
-            border-radius: 50%;
-            filter: blur(8px);
-            opacity: 0.6;
-            animation: orbGlow 1.4s ease-in-out infinite;
+            animation: orbPulse 1.5s ease-in-out infinite;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.8);
         }
 
         .orb:nth-child(1) {
             animation-delay: 0s;
         }
+
         .orb:nth-child(2) {
-            animation-delay: 0.15s;
+            animation-delay: 0.2s;
         }
+
         .orb:nth-child(3) {
-            animation-delay: 0.3s;
+            animation-delay: 0.4s;
         }
+
         .orb:nth-child(4) {
-            animation-delay: 0.45s;
-        }
-        .orb:nth-child(5) {
             animation-delay: 0.6s;
         }
 
-        @keyframes orbBounce {
-            0%, 100% {
-                transform: translateY(0) scale(1);
-            }
-            50% {
-                transform: translateY(-20px) scale(1.2);
-            }
+        .orb:nth-child(5) {
+            animation-delay: 0.8s;
         }
 
-        @keyframes orbGlow {
+        @keyframes orbPulse {
             0%, 100% {
-                opacity: 0.3;
+                transform: scale(1);
+                opacity: 0.5;
             }
             50% {
-                opacity: 0.8;
+                transform: scale(1.8);
+                opacity: 1;
             }
         }
 
         .status-text {
-            font-size: 1em;
-            color: rgba(255, 255, 255, 0.4);
-            font-weight: 600;
-            letter-spacing: 0.15em;
+            font-size: 0.95em;
+            color: #888;
+            margin-top: 25px;
+            animation: statusPulse 2s ease-in-out infinite;
+            letter-spacing: 2px;
             text-transform: uppercase;
-            animation: statusBreathe 2.5s ease-in-out infinite;
         }
 
-        @keyframes statusBreathe {
+        @keyframes statusPulse {
             0%, 100% {
-                opacity: 0.4;
-                transform: translateY(0);
+                opacity: 0.5;
             }
             50% {
                 opacity: 1;
-                transform: translateY(-3px);
+            }
+        }
+
+        .glow-effect {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(102, 126, 234, 0.3), transparent);
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 4s ease-in-out infinite;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 0.3;
+            }
+            50% {
+                transform: translate(-50%, -50%) scale(1.5);
+                opacity: 0.1;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 40px 30px;
+            }
+            .title {
+                font-size: 2.2em;
             }
         }
 
         .version-badge {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(255, 255, 255, 0.05);
-            color: rgba(255, 255, 255, 0.7);
-            padding: 10px 20px;
-            border-radius: 100px;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
             font-size: 0.85rem;
-            font-weight: 600;
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             z-index: 1000;
             opacity: 0;
-            animation: badgeFadeIn 1s ease-out forwards;
-            animation-delay: 1.5s;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            animation: fadeIn 1s ease-out forwards;
+            animation-delay: 2s;
+            transition: all 0.3s ease;
             cursor: pointer;
             user-select: none;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            white-space: nowrap;
         }
 
         .version-badge:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-            color: rgba(255, 255, 255, 0.9);
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.05);
         }
 
         .version-badge.showing-sw {
-            background: rgba(76, 175, 80, 0.2);
-            border-color: rgba(76, 175, 80, 0.3);
-            color: #4caf50;
+            background: rgba(76, 175, 80, 0.8);
         }
 
         .version-tooltip {
             position: fixed;
-            bottom: 75px;
-            right: 20px;
+            bottom: 60px;
+            right: 15px;
             background: rgba(0, 0, 0, 0.9);
             color: white;
-            padding: 16px 20px;
-            border-radius: 12px;
-            font-size: 0.85rem;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
             z-index: 1001;
             opacity: 0;
             visibility: hidden;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            max-width: 220px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 200px;
         }
 
         .version-tooltip.show {
             opacity: 1;
             visibility: visible;
-            transform: translateY(-5px);
         }
 
         .version-tooltip::after {
             content: '';
             position: absolute;
-            bottom: -8px;
-            right: 30px;
+            bottom: -6px;
+            right: 20px;
             width: 0;
             height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-top: 8px solid rgba(0, 0, 0, 0.9);
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid rgba(0, 0, 0, 0.9);
         }
 
-        @keyframes badgeFadeIn {
+        .version-badge::before {
+            content: '';
+        }
+
+        @keyframes fadeIn {
             from {
                 opacity: 0;
                 transform: translateY(20px);
@@ -399,69 +368,44 @@
         }
 
         @media (max-width: 768px) {
-            .container {
-                padding: 60px 40px;
-                margin: 20px;
-            }
-            
-            .title {
-                font-size: 2.8em;
-            }
-            
-            .message {
-                font-size: 1.1em;
-            }
-            
             .version-badge {
-                bottom: 15px;
-                right: 15px;
+                bottom: 10px;
+                right: 10px;
                 font-size: 0.75rem;
-                padding: 8px 16px;
-            }
-            
-            .flag-container {
-                width: 140px;
-                height: 100px;
-            }
-            
-            .flag {
-                width: 140px;
-                height: 100px;
+                padding: 6px 12px;
             }
         }
     </style>
 </head>
 <body>
-    <div class="gradient-bg"></div>
-    <div class="mesh-gradient"></div>
     <div id="particles-js"></div>
+    <div class="glow-effect"></div>
 
     <div class="container">
         <div class="flag-container">
-            <div class="flag-glow"></div>
             <div class="flag">
                 <img src="/img/svg/Flag_of_Georgia.svg" alt="Flag of Georgia">
             </div>
         </div>
         
-        <div class="subtitle">Coming Soon</div>
         <h1 class="title">Under Construction</h1>
         
-        <p class="message">We're crafting something <span class="message-highlight">extraordinary</span><br>Stay tuned for the launch</p>
+        <p class="message">Thank you for visiting!<br>We're working on something amazing.</p>
         
-        <div class="loader-section">
-            <div class="orbs-container">
+        <div class="spinner-container">
+            <div class="orbs">
                 <div class="orb"></div>
                 <div class="orb"></div>
                 <div class="orb"></div>
                 <div class="orb"></div>
                 <div class="orb"></div>
             </div>
-            
-            <p class="status-text">Building the future</p>
         </div>
+        
+        <p class="status-text">Building the future</p>
     </div>
 
+    <!-- Version Badge -->
     <div class="version-badge" id="versionBadge">2.0</div>
     <div class="version-tooltip" id="versionTooltip"></div>
 
@@ -470,7 +414,7 @@
         particlesJS('particles-js', {
             particles: {
                 number: {
-                    value: 80,
+                    value: 100,
                     density: {
                         enable: true,
                         value_area: 800
@@ -480,15 +424,19 @@
                     value: '#667eea'
                 },
                 shape: {
-                    type: 'circle'
+                    type: 'circle',
+                    stroke: {
+                        width: 0,
+                        color: '#000000'
+                    }
                 },
                 opacity: {
-                    value: 0.3,
+                    value: 0.4,
                     random: true,
                     anim: {
                         enable: true,
                         speed: 1,
-                        opacity_min: 0.05,
+                        opacity_min: 0.1,
                         sync: false
                     }
                 },
@@ -506,17 +454,22 @@
                     enable: true,
                     distance: 150,
                     color: '#667eea',
-                    opacity: 0.2,
+                    opacity: 0.3,
                     width: 1
                 },
                 move: {
                     enable: true,
-                    speed: 1.5,
+                    speed: 2,
                     direction: 'none',
-                    random: true,
+                    random: false,
                     straight: false,
                     out_mode: 'out',
-                    bounce: false
+                    bounce: false,
+                    attract: {
+                        enable: true,
+                        rotateX: 600,
+                        rotateY: 1200
+                    }
                 }
             },
             interactivity: {
@@ -536,7 +489,7 @@
                     grab: {
                         distance: 200,
                         line_linked: {
-                            opacity: 0.5
+                            opacity: 0.8
                         }
                     },
                     push: {
@@ -547,21 +500,26 @@
             retina_detect: true
         });
 
-        // Version Badge functionality
+        // Version Badge - App version defined inline
         (function() {
             const versionBadge = document.getElementById('versionBadge');
             const versionTooltip = document.getElementById('versionTooltip');
+            // App version defined inline in page code
             const appVersion = '1.1';
             let swVersion = '...';
             
+            // Function to update badge display
             function updateBadgeDisplay() {
                 versionBadge.textContent = `v${appVersion} / SW: ${swVersion}`;
             }
             
+            // Initialize badge with app version
             updateBadgeDisplay();
             
+            // Function to get service worker version
             function getServiceWorkerVersion() {
                 if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    // Request version from service worker
                     const messageChannel = new MessageChannel();
                     
                     messageChannel.port1.onmessage = (event) => {
@@ -576,6 +534,7 @@
                         [messageChannel.port2]
                     );
 
+                    // Fallback: try direct message
                     navigator.serviceWorker.controller.postMessage({ type: 'GET_SW_VERSION' });
                 } else {
                     swVersion = 'none';
@@ -583,15 +542,19 @@
                 }
             }
 
+            // Get service worker version on load
             if ('serviceWorker' in navigator) {
+                // Wait for service worker to be ready
                 navigator.serviceWorker.ready.then(() => {
                     getServiceWorkerVersion();
                 }).catch(() => {
+                    // If service worker not ready, try after a delay
                     setTimeout(() => {
                         getServiceWorkerVersion();
                     }, 1000);
                 });
                 
+                // Listen for service worker messages
                 navigator.serviceWorker.addEventListener('message', (event) => {
                     if (event.data && event.data.type === 'SW_VERSION') {
                         swVersion = event.data.version || 'unknown';
@@ -603,16 +566,19 @@
                 updateBadgeDisplay();
             }
 
+            // Click handler to refresh service worker version
             versionBadge.addEventListener('click', () => {
                 getServiceWorkerVersion();
                 versionBadge.classList.add('showing-sw');
                 
+                // Show tooltip with detailed info
                 versionTooltip.innerHTML = `
-                    <div style="margin-bottom: 8px;"><strong>App:</strong> v${appVersion}</div>
+                    <div style="margin-bottom: 6px;"><strong>App:</strong> v${appVersion}</div>
                     <div><strong>Service Worker:</strong> ${swVersion}</div>
                 `;
                 versionTooltip.classList.add('show');
                 
+                // Hide after 3 seconds
                 setTimeout(() => {
                     versionTooltip.classList.remove('show');
                     versionBadge.classList.remove('showing-sw');
@@ -620,13 +586,16 @@
             });
         })();
 
-        // Service Worker Registration
+        // Early Service Worker Registration and Version Check
         if ('serviceWorker' in navigator) {
+            // Check app version (using inline version from version badge code)
             async function checkAppVersion() {
                 try {
+                    // Get version from version badge (defined above)
                     const versionBadge = document.getElementById('versionBadge');
-                    let currentVersion = '1.1';
+                    let currentVersion = '1.1'; // Default fallback
                     if (versionBadge) {
+                        // Extract version from badge text (format: "v1.1 / SW: ...")
                         const badgeText = versionBadge.textContent || '';
                         const versionMatch = badgeText.match(/v([\d.]+)/);
                         if (versionMatch) {
@@ -635,11 +604,15 @@
                     }
                     const storedVersion = localStorage.getItem('app-version');
                     
+                    // If version changed or this is first installation
                     if (storedVersion !== currentVersion) {
+                        // Update version in localStorage
                         localStorage.setItem('app-version', currentVersion);
                         
+                        // If this is not the first installation, show notification
                         if (storedVersion) {
                             if (confirm('ხელმისაწვდომია ახალი ვერსია. გსურთ განახლება?')) {
+                                // Clear cache and reload page
                                 if ('caches' in window) {
                                     const cacheNames = await caches.keys();
                                     await Promise.all(
@@ -656,18 +629,22 @@
             }
 
             window.addEventListener('load', function() {
+                // Check version on load
                 checkAppVersion();
                 
+                // Register Service Worker with updateViaCache: 'none' to always check for updates
                 navigator.serviceWorker.register('/workbox-service-worker.js', {
                     updateViaCache: 'none'
                 })
                     .then(registration => {
                         console.log('Service Worker registered:', registration);
                         
+                        // Check for Service Worker updates
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
                             newWorker.addEventListener('statechange', () => {
                                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                    // Show update notification
                                     if (confirm('ხელმისაწვდომია ახალი ვერსია. გსურთ განახლება?')) {
                                         newWorker.postMessage({ type: 'SKIP_WAITING' });
                                         window.location.reload();
@@ -676,6 +653,7 @@
                             });
                         });
 
+                        // Handle Service Worker version
                         if (navigator.serviceWorker.controller) {
                             navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' });
                         } else {
@@ -688,8 +666,10 @@
                         console.error('Service Worker registration failed:', error);
                     });
 
+                // Handle messages from Service Worker (version info goes to version badge)
                 navigator.serviceWorker.addEventListener('message', event => {
                     if (event.data && event.data.version) {
+                        // Version badge will handle this via its own message listener
                         console.log('Service Worker version:', event.data.version);
                     }
                 });
@@ -698,3 +678,10 @@
     </script>
 </body>
 </html>
+<!-- --- Changelog ---
+2025-01-27: Added meta tags, service worker registration, and version badge functionality from index.html. (auto)
+2025-01-27: Replaced CSS-based flag with SVG image from Flag_of_Georgia.svg. (auto)
+2025-01-27: Enhanced service worker to check for updates on every page load, visibility change, and periodically. Automatically reloads page when new version is available. (auto)
+2025-01-27: Updated version badge to display both app version and service worker version simultaneously. (auto)
+2025-01-27: Removed external version.js file and moved app version definition inline in page code. (auto)
+2025-01-27: Updated service worker integration from index-sw.html (without push notifications). Added app version checking and update notifications. (auto) -->
