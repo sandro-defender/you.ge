@@ -1,12 +1,4 @@
-/*
-Project: You.Ge
-File: workbox-service-worker.js
-Version: 2.0
-Author: Cursor AI
-Model: Claude Sonnet 4.5
-Last Modified: 2025-01-27
-Purpose: Service Worker for PWA caching with Workbox - simplified version for landing page
-*/
+
 
 // Workbox ბიბლიოთეკების CDN-დან იმპორტი
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.3.0/workbox-sw.js');
