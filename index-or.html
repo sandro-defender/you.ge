@@ -1,0 +1,457 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>You.Ge - Welcome</title>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  <!-- , viewport-fit=cover"> (for fullscreen) -->
+    <meta name="theme-color" content="#000000">
+    
+    <link rel="icon" href="/img/icon/icon.png" type="image/png">   <!--ios app image only! -->
+    <link rel="apple-touch-icon-precomposed" href="/img/icon/icon.png">
+    <link rel="apple-touch-icon" sizes="512x512" href="/img/icon/icon.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/img/icon/icon.png">
+    
+    <!--for windows--> 
+    <meta content="/img/icon/icon.png" name="msapplication-TileImage">
+    
+    <!-- ios meta -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Iveria Staff">
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-touch-fullscreen" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    
+    
+    <!-- ios splash screens -->
+    <link rel="apple-touch-startup-image" href="/img/icon/icon.png">
+    
+    <!-- Version Information -->
+    <script src="/version.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            overflow: hidden;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            height: 100vh;
+            position: relative;
+        }
+
+        .container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 100%;
+        }
+
+        .logo-container {
+            animation: float 3s ease-in-out infinite;
+        }
+
+        .logo {
+            font-size: 4rem;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+        }
+
+        .welcome-text {
+            font-size: 2.5rem;
+            color: white;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+            animation-delay: 0.5s;
+        }
+
+        .description {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 2rem;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+            animation-delay: 1s;
+        }
+
+        .cta-button {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+            animation-delay: 1.5s;
+        }
+
+        .hero-image {
+            width: 160px;
+            height: auto;
+            display: block;
+            border-radius: 24px;
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        .georgia-banner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .cta-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .secondary-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 100%;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.5s ease;
+        }
+
+        .secondary-content.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .secondary-content h2 {
+            font-size: 2.5rem;
+            color: white;
+            margin-bottom: 1.5rem;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .secondary-content p {
+            font-size: 1.2rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 1rem;
+        }
+
+        .back-button {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            color: white;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 2rem;
+            display: inline-block;
+            text-decoration: none;
+        }
+
+        .back-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+                transform: translate(-50%, -50%);
+            }
+            to {
+                opacity: 0;
+                transform: translate(-50%, -60%);
+            }
+        }
+
+        .container.fade-out {
+            animation: fadeOut 0.5s ease-out forwards;
+        }
+
+        .georgia-flag {
+            font-size: 5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+            100% { transform: translateY(0px); }
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96f2d7);
+            animation: rotate 20s linear infinite;
+            z-index: -1;
+        }
+
+        @keyframes rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .version-badge {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            z-index: 1000;
+            opacity: 0;
+            animation: fadeIn 1s ease-out forwards;
+            animation-delay: 2s;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .version-badge:hover {
+            background: rgba(0, 0, 0, 0.8);
+            transform: scale(1.05);
+        }
+
+        .version-badge.showing-sw {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .version-tooltip {
+            position: fixed;
+            bottom: 60px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            z-index: 1001;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 200px;
+        }
+
+        .version-tooltip.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .version-tooltip::after {
+            content: '';
+            position: absolute;
+            bottom: -6px;
+            right: 20px;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid rgba(0, 0, 0, 0.9);
+        }
+
+        .version-badge::before {
+            content: 'v';
+            margin-right: 4px;
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .logo {
+                font-size: 3rem;
+            }
+            .welcome-text {
+                font-size: 2rem;
+            }
+            .description {
+                font-size: 1rem;
+            }
+            .version-badge {
+                bottom: 10px;
+                right: 10px;
+                font-size: 0.75rem;
+                padding: 6px 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo-container">
+            <div class="georgia-banner">
+                <span class="georgia-flag" aria-hidden="true">🇬🇪</span>
+                <img class="hero-image" src="/img/gif/georgia.gif" alt="Animated landscape of Georgia">
+                <span class="georgia-flag" aria-hidden="true">🇬🇪</span>
+            </div>
+            <h1 class="logo">You.Ge</h1>
+        </div>
+        <h2 class="welcome-text">Welcome to You.Ge</h2>
+        <p class="description">Under Construction</p>
+        <p class="description">Please check back soon!</p>
+        <button class="cta-button">Explore Now</button>
+    </div>
+
+    <div class="secondary-content">
+        <h2>You.Ge™</h2>
+        <p>Thank you for visiting!</p>
+        <p>We're working on something amazing.</p>
+        <button class="back-button" onclick="location.reload()">Go Back</button>
+    </div>
+
+    <!-- Version Badge -->
+    <div class="version-badge" id="versionBadge">0.1</div>
+    <div class="version-tooltip" id="versionTooltip"></div>
+
+    <script>
+        // Version Badge - Update version from version.js if available
+        (function() {
+            const versionBadge = document.getElementById('versionBadge');
+            const versionTooltip = document.getElementById('versionTooltip');
+            const defaultVersion = '0.1'; // Default version from HTML header
+            let appVersion = defaultVersion;
+            
+            // Try to get version from window.VERSION (set by version.js)
+            if (typeof window.VERSION !== 'undefined' && window.VERSION) {
+                appVersion = window.VERSION;
+                versionBadge.textContent = appVersion;
+            } else {
+                // Wait a bit for version.js to load, then check again
+                setTimeout(() => {
+                    if (typeof window.VERSION !== 'undefined' && window.VERSION) {
+                        appVersion = window.VERSION;
+                        versionBadge.textContent = appVersion;
+                    } else {
+                        versionBadge.textContent = appVersion;
+                    }
+                }, 100);
+            }
+
+            // Listen for service worker messages
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.addEventListener('message', (event) => {
+                    if (event.data && event.data.type === 'SW_VERSION') {
+                        const swVersion = event.data.version || 'unknown';
+                        showVersionInfo(appVersion, swVersion);
+                    }
+                });
+            }
+
+            // Click handler to get service worker version
+            versionBadge.addEventListener('click', () => {
+                if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+                    // Request version from service worker
+                    const messageChannel = new MessageChannel();
+                    
+                    messageChannel.port1.onmessage = (event) => {
+                        if (event.data && event.data.type === 'SW_VERSION') {
+                            const swVersion = event.data.version || 'unknown';
+                            showVersionInfo(appVersion, swVersion);
+                        }
+                    };
+
+                    navigator.serviceWorker.controller.postMessage(
+                        { type: 'GET_SW_VERSION' },
+                        [messageChannel.port2]
+                    );
+
+                    // Fallback: try direct message
+                    navigator.serviceWorker.controller.postMessage({ type: 'GET_SW_VERSION' });
+                    
+                    // Show loading state
+                    versionBadge.classList.add('showing-sw');
+                } else {
+                    // No service worker registered
+                    showVersionInfo(appVersion, 'not registered');
+                }
+            });
+
+            // Function to show version information
+            function showVersionInfo(appVer, swVer) {
+                versionTooltip.innerHTML = `
+                    <div style="margin-bottom: 6px;"><strong>App:</strong> v${appVer}</div>
+                    <div><strong>SW:</strong> ${swVer}</div>
+                `;
+                versionTooltip.classList.add('show');
+                
+                // Hide after 3 seconds
+                setTimeout(() => {
+                    versionTooltip.classList.remove('show');
+                    versionBadge.classList.remove('showing-sw');
+                }, 3000);
+            }
+
+            // Tooltip auto-hides after 3 seconds (handled in showVersionInfo)
+        })();
+
+        // Button click handler - fade out welcome screen and show secondary content
+        document.querySelector('.cta-button').addEventListener('click', function() {
+            const container = document.querySelector('.container');
+            const secondaryContent = document.querySelector('.secondary-content');
+            
+            // Fade out the welcome container
+            container.classList.add('fade-out');
+            
+            // Show secondary content after fade out animation
+            setTimeout(() => {
+                container.style.display = 'none';
+                secondaryContent.classList.add('active');
+            }, 500);
+        });
+
+        // Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/workbox-service-worker.js')
+                    .then((registration) => {
+                        console.log('Service Worker registered successfully:', registration.scope);
+                    })
+                    .catch((error) => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
