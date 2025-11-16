@@ -12,7 +12,7 @@ Purpose: Service Worker for PWA caching with Workbox - simplified version for la
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.3.0/workbox-sw.js');
 
 // ვერსია კეშის მართვისთვის
-const VERSION = '__VERSION__' || 'v2.2';
+const VERSION = '__VERSION__';
 
 // URL-მისამართების სია კეშიდან გამორიცხვისთვის
 const EXCLUDED_URLS = [
