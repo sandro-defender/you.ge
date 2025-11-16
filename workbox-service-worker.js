@@ -12,12 +12,17 @@ Purpose: Service Worker for PWA caching with Workbox - simplified version for la
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/7.3.0/workbox-sw.js');
 
 // ვერსია კეშის მართვისთვის
-const VERSION = '__VERSION__' || 'v1.0.0';
+const VERSION = '__VERSION__' || 'v2.2';
 
 // URL-მისამართების სია კეშიდან გამორიცხვისთვის
 const EXCLUDED_URLS = [
   'google-analytics.com',
-  'googletagmanager.com'
+  'googletagmanager.com',
+  'cloudflareinsights.com',
+  'cloudflare.com/beacon',
+  'analytics',
+  'beacon',
+  'tracking'
 ];
 
 // ჩართვა განვითარების რეჟიმში
@@ -83,6 +88,7 @@ self.addEventListener('activate', (event) => {
 });
 
 // მითითებული URL-ების კეშირებიდან გამორიცხვა (მკაცრად ქსელი, კეშის გარეშე)
+// Use NetworkOnly strategy - these URLs should never be cached
 registerRoute(
   ({ url }) => EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl)),
   new NetworkOnly()
@@ -126,9 +132,11 @@ registerRoute(
 
 // StaleWhileRevalidate სტრატეგია JavaScript და CSS ფაილებისთვის
 registerRoute(
-  ({ request }) => 
-    request.destination === 'script' || 
-    request.destination === 'style',
+  ({ request, url }) => {
+    // Exclude analytics, beacons, and tracking scripts
+    const isExcluded = EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl));
+    return !isExcluded && (request.destination === 'script' || request.destination === 'style');
+  },
   new StaleWhileRevalidate({
     cacheName: 'static-resources-' + VERSION,
     plugins: [
@@ -145,7 +153,11 @@ registerRoute(
 
 // CacheFirst სტრატეგია სურათებისთვის
 registerRoute(
-  ({ request }) => request.destination === 'image',
+  ({ request, url }) => {
+    // Exclude analytics and tracking images
+    const isExcluded = EXCLUDED_URLS.some(excludedUrl => url.href.includes(excludedUrl));
+    return !isExcluded && request.destination === 'image';
+  },
   new CacheFirst({
     cacheName: 'images-cache-' + VERSION,
     plugins: [
@@ -193,5 +205,10 @@ Model: Claude Sonnet 4.5
 [2025-01-27] v2.1 – Added version message handler: Service worker now responds to GET_SW_VERSION messages from clients.
 Reason: To enable version badge to display service worker version when clicked.
 Thoughts: Message handler supports both MessageChannel and direct message communication for maximum compatibility.
+Model: Claude Sonnet 4.5
+
+[2025-01-27] v2.2 – Fixed caching issues with analytics and beacon scripts: Added Cloudflare Insights and other analytics services to exclusion list. Added error handling for network failures on excluded URLs. Updated script and image routes to exclude analytics/beacon resources.
+Reason: Service worker was trying to cache Cloudflare Insights beacon script causing network errors and IndexedDB errors.
+Thoughts: Analytics and tracking scripts should never be cached as they need to make fresh requests. Added comprehensive exclusion list and error handling.
 Model: Claude Sonnet 4.5
 */
