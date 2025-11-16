@@ -54,15 +54,18 @@
 
         .container {
             text-align: center;
-            background: rgba(20, 20, 30, 0.7);
+            background: rgba(20, 20, 30, 0.25);
             padding: 60px 40px;
             border-radius: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 100px rgba(102, 126, 234, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.1),
+                        0 0 100px rgba(102, 126, 234, 0.15);
             max-width: 600px;
             z-index: 1;
             animation: fadeInScale 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            backdrop-filter: blur(20px);
+            backdrop-filter: blur(30px) saturate(180%);
+            -webkit-backdrop-filter: blur(30px) saturate(180%);
         }
 
         @keyframes fadeInScale {
