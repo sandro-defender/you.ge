@@ -1,3 +1,10 @@
+/*.html
+  Content-Type: text/html; charset=utf-8
+  Cache-Control: public, max-age=3600
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: origin-when-cross-origin
+
 /workbox-service-worker.js
   Cache-Control: no-cache, no-store, must-revalidate
   Pragma: no-cache

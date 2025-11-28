@@ -1,0 +1,11 @@
+{
+  "name": "you.ge-obfuscated",
+  "version": "1.0.0",
+  "description": "Obfuscated HTML build for you.ge",
+  "scripts": {
+    "build": "node build-obfuscate.js",
+    "clean": "rm -rf dist"
+  },
+  "author": "",
+  "license": "ISC"
+}
