@@ -2,32 +2,15 @@
 
 /**
  * HTML Build Script
- * This script processes HTML files and updates version numbers
- * Automatically includes all files except those in IGNORE_LIST
+ * This script updates the version number in workbox-service-worker.js
+ * It does NOT copy files to a dist directory anymore.
  */
 
 const fs = require('fs');
 const path = require('path');
 
 // Configuration
-const OUTPUT_DIR = 'dist';
-
-const IGNORE_LIST = [
-    '.git',
-    '.gitignore',
-    'node_modules',
-    OUTPUT_DIR,
-    'build.js',
-    'package.json',
-    'package-lock.json',
-    '.DS_Store',
-    '.gemini'
-];
-
-// Create output directory if it doesn't exist
-if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
+const SERVICE_WORKER_FILE = 'workbox-service-worker.js';
 
 /**
  * Get current timestamp in Asia/Tbilisi timezone
@@ -49,72 +32,48 @@ function getVersionTimestamp() {
 }
 
 /**
- * Process workbox-service-worker.js with version replacement
+ * Update version in workbox-service-worker.js
  */
-function processServiceWorker(srcPath, destPath) {
+function updateServiceWorkerVersion() {
+    const filePath = path.join(__dirname, SERVICE_WORKER_FILE);
+
+    if (!fs.existsSync(filePath)) {
+        console.error(`❌ Error: ${SERVICE_WORKER_FILE} not found!`);
+        process.exit(1);
+    }
+
     // Read the file
-    let content = fs.readFileSync(srcPath, 'utf8');
+    let content = fs.readFileSync(filePath, 'utf8');
 
-    // Replace __VERSION__ with timestamp
+    // Get new version
     const version = getVersionTimestamp();
-    content = content.replace(/__VERSION__/g, version);
 
-    // Write to destination
-    fs.writeFileSync(destPath, content, 'utf8');
+    // Replace const VERSION = '...'; with new version
+    // This regex matches: const VERSION = 'anything'; or "anything";
+    // We use ^\s* to ensure it's the start of the line (ignoring whitespace) to avoid matching comments
+    const regex = /^\s*const VERSION = ['"].*['"];/m;
 
-    console.log(`   ✅ Processed service worker with version: ${version}`);
-}
-
-/**
- * Recursively process directory
- */
-function processDirectory(currentDir, relativePath = '') {
-    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
-
-    for (const entry of entries) {
-        const entryName = entry.name;
-        const entryPath = path.join(currentDir, entryName);
-        const entryRelativePath = path.join(relativePath, entryName);
-
-        // Check ignore list
-        if (IGNORE_LIST.includes(entryName)) {
-            continue;
-        }
-
-        const destPath = path.join(__dirname, OUTPUT_DIR, entryRelativePath);
-
-        if (entry.isDirectory()) {
-            // Create directory in dist
-            if (!fs.existsSync(destPath)) {
-                fs.mkdirSync(destPath, { recursive: true });
-            }
-            // Recurse
-            processDirectory(entryPath, entryRelativePath);
-        } else {
-            // Ensure parent directory exists
-            const destDir = path.dirname(destPath);
-            if (!fs.existsSync(destDir)) {
-                fs.mkdirSync(destDir, { recursive: true });
-            }
-
-            // Special handling for service worker
-            if (entryName === 'workbox-service-worker.js') {
-                processServiceWorker(entryPath, destPath);
-            } else {
-                // Copy file
-                fs.copyFileSync(entryPath, destPath);
-                console.log(`   ✅ Copied: ${entryRelativePath}`);
-            }
+    if (regex.test(content)) {
+        content = content.replace(regex, `const VERSION = '${version}';`);
+        console.log(`   ✅ Updated version to: ${version}`);
+    } else {
+        console.warn(`   ⚠️ Warning: Could not find "const VERSION = '...';" pattern in ${SERVICE_WORKER_FILE}`);
+        // Fallback: try replacing __VERSION__ if it exists (first run)
+        if (content.includes('__VERSION__')) {
+            content = content.replace('__VERSION__', version);
+            console.log(`   ✅ Replaced __VERSION__ with: ${version}`);
         }
     }
+
+    // Write back to file
+    fs.writeFileSync(filePath, content, 'utf8');
 }
 
 // Main execution
-console.log('🔒 HTML Build Script\n');
+console.log('🔒 Build Script (Version Update Only)\n');
 console.log('━'.repeat(50));
 
-console.log('📦 Scanning and processing files...');
-processDirectory(__dirname);
+updateServiceWorkerVersion();
 
 console.log('━'.repeat(50));
-console.log(`\n✨ Build complete! Files are in: ${OUTPUT_DIR}/`);
+console.log(`\n✨ Version update complete!`);
