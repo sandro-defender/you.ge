@@ -68,7 +68,7 @@
         // Check if already authenticated
         async function checkAuth() {
             try {
-                const response = await fetch('/api/check-auth', {
+                const response = await fetch('/api/auth', {
                     method: 'GET',
                     credentials: 'include'
                 });
@@ -100,7 +100,7 @@
             }
 
             try {
-                const response = await fetch('/api/check-auth', {
+                const response = await fetch('/api/auth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
