@@ -12,14 +12,27 @@ export async function onRequest(context) {
             status: 302,
             headers: {
                 "Location": "/admin/login",
-                "Set-Cookie": `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`
+                "Set-Cookie": `${SESSION_COOKIE}=deleted; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=Strict`
             }
         });
     }
 
     // --- Check if session cookie is valid ---
     const cookies = request.headers.get("Cookie") || "";
-    if (cookies.includes(`${SESSION_COOKIE}=${password}`)) {
+
+    // Parse cookies strictly
+    let isLoggedIn = false;
+    if (cookies) {
+        const cookieMap = new Map(cookies.split(';').map(c => {
+            const parts = c.trim().split('=');
+            return [parts[0], parts.slice(1).join('=')];
+        }));
+        if (cookieMap.get(SESSION_COOKIE) === password) {
+            isLoggedIn = true;
+        }
+    }
+
+    if (isLoggedIn) {
         // If already logged in and trying to go to login page, redirect to admin
         if (url.pathname === "/admin/login") {
             return new Response("", {
