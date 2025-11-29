@@ -1,16 +1,15 @@
 #!/usr/bin/env node
 
 /**
- * HTML Obfuscation Build Script
- * This script encodes HTML files to make them unreadable in the browser's "View Source"
- * while still functioning normally when loaded.
+ * HTML Build Script
+ * This script processes HTML files and updates version numbers
  */
 
 const fs = require('fs');
 const path = require('path');
 
 // Configuration
-const FILES_TO_OBFUSCATE = [
+const HTML_FILES = [
     'index.html',
     'index-new.html',
     'index-or.html',
@@ -20,44 +19,11 @@ const FILES_TO_OBFUSCATE = [
     'html/prompt.html'
 ];
 
-const OUTPUT_DIR = 'dist'; // Output directory for obfuscated files
+const OUTPUT_DIR = 'dist'; // Output directory for files
 
 // Create output directory if it doesn't exist
 if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
-
-/**
- * Obfuscate HTML content
- * Uses Base64 encoding + JavaScript wrapper to decode at runtime
- */
-function obfuscateHTML(htmlContent) {
-    // Encode the HTML content to Base64
-    const base64Content = Buffer.from(htmlContent).toString('base64');
-
-    // Split into chunks to make it harder to decode manually
-    const chunkSize = 100;
-    const chunks = [];
-    for (let i = 0; i < base64Content.length; i += chunkSize) {
-        chunks.push(base64Content.substring(i, i + chunkSize));
-    }
-
-    // Create obfuscated variable names
-    const varNames = {
-        data: '_0x' + Math.random().toString(36).substring(2, 8),
-        decode: '_0x' + Math.random().toString(36).substring(2, 8),
-        write: '_0x' + Math.random().toString(36).substring(2, 8)
-    };
-
-    // Create the self-decoding HTML wrapper
-    const obfuscatedHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><script>
-(function(){var ${varNames.data}=[${chunks.map(c => `"${c}"`).join(',')}].join('');
-var ${varNames.decode}=function(s){try{return atob(s)}catch(e){return''}};
-var ${varNames.write}=function(){document.open();document.write(${varNames.decode}(${varNames.data}));document.close()};
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',${varNames.write})}else{${varNames.write}()}})();
-</script></head><body></body></html>`;
-
-    return obfuscatedHTML;
 }
 
 /**
@@ -76,9 +42,6 @@ function processFile(filePath) {
     // Read the original HTML
     const htmlContent = fs.readFileSync(fullPath, 'utf8');
 
-    // Obfuscate it
-    const obfuscated = obfuscateHTML(htmlContent);
-
     // Write to output directory
     const outputPath = path.join(__dirname, OUTPUT_DIR, filePath);
     const outputDir = path.dirname(outputPath);
@@ -88,13 +51,9 @@ function processFile(filePath) {
         fs.mkdirSync(outputDir, { recursive: true });
     }
 
-    fs.writeFileSync(outputPath, obfuscated, 'utf8');
+    fs.writeFileSync(outputPath, htmlContent, 'utf8');
 
-    const originalSize = Buffer.from(htmlContent).length;
-    const obfuscatedSize = Buffer.from(obfuscated).length;
-    const ratio = ((obfuscatedSize / originalSize) * 100).toFixed(1);
-
-    console.log(`   ✅ Obfuscated: ${originalSize} → ${obfuscatedSize} bytes (${ratio}%)`);
+    console.log(`   ✅ Copied: ${filePath}`);
 }
 
 /**
@@ -209,18 +168,14 @@ function copyDirRecursive(src, dest) {
 }
 
 // Main execution
-console.log('🔒 HTML Obfuscation Build Script\n');
+console.log('🔒 HTML Build Script\n');
 console.log('━'.repeat(50));
 
 // Process all HTML files
-FILES_TO_OBFUSCATE.forEach(processFile);
+HTML_FILES.forEach(processFile);
 
 // Copy other files
 copyOtherFiles();
 
 console.log('━'.repeat(50));
-console.log(`\n✨ Build complete! Obfuscated files are in: ${OUTPUT_DIR}/`);
-console.log('\n📝 Next steps:');
-console.log('   1. Review the files in the dist/ directory');
-console.log('   2. Deploy the dist/ directory to Cloudflare Pages');
-console.log('   3. Your HTML source will be unreadable in "View Source"\n');
+console.log(`\n✨ Build complete! Files are in: ${OUTPUT_DIR}/`);

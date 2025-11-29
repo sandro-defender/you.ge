@@ -1,20 +1,22 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>You.Ge - Welcome</title>
     <link rel="manifest" href="/manifest.json">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">  <!-- , viewport-fit=cover"> (for fullscreen) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- , viewport-fit=cover"> (for fullscreen) -->
     <meta name="theme-color" content="#000000">
-    
-    <link rel="icon" href="/img/icon/icon.png" type="image/png">   <!--ios app image only! -->
+
+    <link rel="icon" href="/img/icon/icon.png" type="image/png"> <!--ios app image only! -->
     <link rel="apple-touch-icon-precomposed" href="/img/icon/icon.png">
     <link rel="apple-touch-icon" sizes="256x256" href="/img/icon/icon.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/img/icon/icon.png">
-    
-    <!--for windows--> 
+
+    <!--for windows-->
     <meta content="/img/icon/icon.png" name="msapplication-TileImage">
-    
+
     <!-- ios meta -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-title" content="Iveria Staff">
@@ -22,11 +24,11 @@
     <meta name="apple-touch-fullscreen" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
-    
-    
+
+
     <!-- ios splash screens -->
     <link rel="apple-touch-startup-image" href="/img/icon/icon.png">
-    
+
     <style>
         * {
             margin: 0;
@@ -58,9 +60,9 @@
             padding: 60px 40px;
             border-radius: 30px;
             border: 1px solid rgba(255, 255, 255, 0.2);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 
-                        inset 0 1px 0 rgba(255, 255, 255, 0.15),
-                        0 0 100px rgba(102, 126, 234, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15),
+                0 0 100px rgba(102, 126, 234, 0.1);
             max-width: 600px;
             z-index: 1;
             animation: fadeInScale 1.2s cubic-bezier(0.68, -0.55, 0.265, 1.55);
@@ -73,6 +75,7 @@
                 opacity: 0;
                 transform: scale(0.8) translateY(30px);
             }
+
             to {
                 opacity: 1;
                 transform: scale(1) translateY(0);
@@ -108,15 +111,20 @@
         }
 
         @keyframes flagFloat {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: translateY(0px) rotateY(0deg);
             }
+
             25% {
                 transform: translateY(-10px) rotateY(-5deg);
             }
+
             50% {
                 transform: translateY(0px) rotateY(0deg);
             }
+
             75% {
                 transform: translateY(-10px) rotateY(5deg);
             }
@@ -137,9 +145,12 @@
         }
 
         @keyframes gradientShift {
-            0%, 100% {
+
+            0%,
+            100% {
                 background-position: 0% 50%;
             }
+
             50% {
                 background-position: 100% 50%;
             }
@@ -154,10 +165,13 @@
         }
 
         @keyframes messageFloat {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: translateY(0);
                 opacity: 0.9;
             }
+
             50% {
                 transform: translateY(-5px);
                 opacity: 1;
@@ -182,8 +196,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .orbs {
@@ -224,10 +243,13 @@
         }
 
         @keyframes orbPulse {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: scale(1);
                 opacity: 0.5;
             }
+
             50% {
                 transform: scale(1.8);
                 opacity: 1;
@@ -244,9 +266,12 @@
         }
 
         @keyframes statusPulse {
-            0%, 100% {
+
+            0%,
+            100% {
                 opacity: 0.5;
             }
+
             50% {
                 opacity: 1;
             }
@@ -267,10 +292,13 @@
         }
 
         @keyframes pulse {
-            0%, 100% {
+
+            0%,
+            100% {
                 transform: translate(-50%, -50%) scale(1);
                 opacity: 0.3;
             }
+
             50% {
                 transform: translate(-50%, -50%) scale(1.5);
                 opacity: 0.1;
@@ -281,6 +309,7 @@
             .container {
                 padding: 40px 30px;
             }
+
             .title {
                 font-size: 2.2em;
             }
@@ -361,6 +390,7 @@
                 opacity: 0;
                 transform: translateY(20px);
             }
+
             to {
                 opacity: 1;
                 transform: translateY(0);
@@ -377,6 +407,7 @@
         }
     </style>
 </head>
+
 <body>
     <div id="particles-js"></div>
     <div class="glow-effect"></div>
@@ -387,11 +418,11 @@
                 <img src="/img/svg/Flag_of_Georgia.svg" alt="Flag of Georgia">
             </div>
         </div>
-        
+
         <h1 class="title">Under Construction</h1>
-        
+
         <p class="message">Thank you for visiting!<br>We're working on something amazing.</p>
-        
+
         <div class="spinner-container">
             <div class="orbs">
                 <div class="orb"></div>
@@ -401,8 +432,15 @@
                 <div class="orb"></div>
             </div>
         </div>
-        
+
         <p class="status-text">Building the future</p>
+
+        <div style="margin-top: 30px;">
+            <a href="/admin/login.html"
+                style="color: rgba(255,255,255,0.1); text-decoration: none; font-size: 0.8em; transition: all 0.3s ease;"
+                onmouseover="this.style.color='rgba(255,255,255,0.5)'"
+                onmouseout="this.style.color='rgba(255,255,255,0.1)'">Admin Access</a>
+        </div>
     </div>
 
     <!-- Version Badge -->
@@ -501,27 +539,27 @@
         });
 
         // Version Badge - App version defined inline
-        (function() {
+        (function () {
             const versionBadge = document.getElementById('versionBadge');
             const versionTooltip = document.getElementById('versionTooltip');
             // App version defined inline in page code
             const appVersion = '1.1';
             let swVersion = '...';
-            
+
             // Function to update badge display
             function updateBadgeDisplay() {
                 versionBadge.textContent = `v${appVersion} / SW: ${swVersion}`;
             }
-            
+
             // Initialize badge with app version
             updateBadgeDisplay();
-            
+
             // Function to get service worker version
             function getServiceWorkerVersion() {
                 if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
                     // Request version from service worker
                     const messageChannel = new MessageChannel();
-                    
+
                     messageChannel.port1.onmessage = (event) => {
                         if (event.data && event.data.type === 'SW_VERSION') {
                             swVersion = event.data.version || 'unknown';
@@ -553,7 +591,7 @@
                         getServiceWorkerVersion();
                     }, 1000);
                 });
-                
+
                 // Listen for service worker messages
                 navigator.serviceWorker.addEventListener('message', (event) => {
                     if (event.data && event.data.type === 'SW_VERSION') {
@@ -570,14 +608,14 @@
             versionBadge.addEventListener('click', () => {
                 getServiceWorkerVersion();
                 versionBadge.classList.add('showing-sw');
-                
+
                 // Show tooltip with detailed info
                 versionTooltip.innerHTML = `
                     <div style="margin-bottom: 6px;"><strong>App:</strong> v${appVersion}</div>
                     <div><strong>Service Worker:</strong> ${swVersion}</div>
                 `;
                 versionTooltip.classList.add('show');
-                
+
                 // Hide after 3 seconds
                 setTimeout(() => {
                     versionTooltip.classList.remove('show');
@@ -603,12 +641,12 @@
                         }
                     }
                     const storedVersion = localStorage.getItem('app-version');
-                    
+
                     // If version changed or this is first installation
                     if (storedVersion !== currentVersion) {
                         // Update version in localStorage
                         localStorage.setItem('app-version', currentVersion);
-                        
+
                         // If this is not the first installation, show notification
                         if (storedVersion) {
                             if (confirm('ხელმისაწვდომია ახალი ვერსია. გსურთ განახლება?')) {
@@ -628,17 +666,17 @@
                 }
             }
 
-            window.addEventListener('load', function() {
+            window.addEventListener('load', function () {
                 // Check version on load
                 checkAppVersion();
-                
+
                 // Register Service Worker with updateViaCache: 'none' to always check for updates
                 navigator.serviceWorker.register('/workbox-service-worker.js', {
                     updateViaCache: 'none'
                 })
                     .then(registration => {
                         console.log('Service Worker registered:', registration);
-                        
+
                         // Check for Service Worker updates
                         registration.addEventListener('updatefound', () => {
                             const newWorker = registration.installing;
@@ -677,6 +715,7 @@
         }
     </script>
 </body>
+
 </html>
 <!-- --- Changelog ---
 2025-01-27: Added meta tags, service worker registration, and version badge functionality from index.html. (auto)
