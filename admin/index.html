@@ -401,16 +401,14 @@
                 loginBtn.classList.remove('loading');
                 loginBtn.textContent = 'Sign In';
 
-                // Handle 403 Forbidden (wrong password)
+                // Handle 403 Forbidden (wrong password) - redirect to main page
                 if (response.status === 403) {
-                    errorDiv.textContent = 'Incorrect password';
-                    errorDiv.style.display = 'block';
+                    window.location.href = '/';
                     return;
                 }
 
                 if (!response.ok) {
-                    errorDiv.textContent = `Error: ${response.status}`;
-                    errorDiv.style.display = 'block';
+                    window.location.href = '/';
                     return;
                 }
 
@@ -420,15 +418,13 @@
                     showAdminContent();
                     document.getElementById('password').value = '';
                 } else {
-                    errorDiv.textContent = 'Incorrect password';
-                    errorDiv.style.display = 'block';
+                    window.location.href = '/';
                 }
             } catch (error) {
                 loginBtn.classList.remove('loading');
                 loginBtn.textContent = 'Sign In';
-                errorDiv.textContent = 'Network error: ' + error.message;
-                errorDiv.style.display = 'block';
                 console.error('Login error:', error);
+                window.location.href = '/';
             }
         }
 

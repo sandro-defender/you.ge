@@ -19,7 +19,8 @@ const EXCLUDED_URLS = [
   'tracking',
   'gtag',
   'ga.js',
-  'functions/admin/check-auth.js',
+  'functions/api/*',
+  'api/*',
   'analytics.js'
 ];
 
