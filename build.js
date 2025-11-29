@@ -3,57 +3,30 @@
 /**
  * HTML Build Script
  * This script processes HTML files and updates version numbers
+ * Automatically includes all files except those in IGNORE_LIST
  */
 
 const fs = require('fs');
 const path = require('path');
 
 // Configuration
-const HTML_FILES = [
-    'index.html',
-    'index-new.html',
-    'index-or.html',
-    'html/403.html',
-    'html/404.html',
-    'html/500.html',
-    'html/prompt.html'
-];
+const OUTPUT_DIR = 'dist';
 
-const OUTPUT_DIR = 'dist'; // Output directory for files
+const IGNORE_LIST = [
+    '.git',
+    '.gitignore',
+    'node_modules',
+    OUTPUT_DIR,
+    'build.js',
+    'package.json',
+    'package-lock.json',
+    '.DS_Store',
+    '.gemini'
+];
 
 // Create output directory if it doesn't exist
 if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-}
-
-/**
- * Process a single HTML file
- */
-function processFile(filePath) {
-    const fullPath = path.join(__dirname, filePath);
-
-    if (!fs.existsSync(fullPath)) {
-        console.warn(`⚠️  File not found: ${filePath}`);
-        return;
-    }
-
-    console.log(`📄 Processing: ${filePath}`);
-
-    // Read the original HTML
-    const htmlContent = fs.readFileSync(fullPath, 'utf8');
-
-    // Write to output directory
-    const outputPath = path.join(__dirname, OUTPUT_DIR, filePath);
-    const outputDir = path.dirname(outputPath);
-
-    // Create subdirectories if needed
-    if (!fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    fs.writeFileSync(outputPath, htmlContent, 'utf8');
-
-    console.log(`   ✅ Copied: ${filePath}`);
 }
 
 /**
@@ -78,15 +51,7 @@ function getVersionTimestamp() {
 /**
  * Process workbox-service-worker.js with version replacement
  */
-function processServiceWorker() {
-    const srcPath = path.join(__dirname, 'workbox-service-worker.js');
-    const destPath = path.join(__dirname, OUTPUT_DIR, 'workbox-service-worker.js');
-
-    if (!fs.existsSync(srcPath)) {
-        console.warn('⚠️  workbox-service-worker.js not found');
-        return;
-    }
-
+function processServiceWorker(srcPath, destPath) {
     // Read the file
     let content = fs.readFileSync(srcPath, 'utf8');
 
@@ -101,68 +66,45 @@ function processServiceWorker() {
 }
 
 /**
- * Copy non-HTML files to dist
+ * Recursively process directory
  */
-function copyOtherFiles() {
-    const filesToCopy = [
-        '_headers',
-        '_redirects',
-        '_routes.json',
-        'manifest.json',
-        'favicon.ico',
-        'favicon2.ico',
-        'apple-touch-icon.png',
-        'README.md'
-    ];
-
-    const dirsToCopy = ['img', 'bar'];
-
-    console.log('\n📦 Copying other files...');
-
-    // Process service worker with version replacement
-    processServiceWorker();
-
-    // Copy individual files
-    filesToCopy.forEach(file => {
-        const srcPath = path.join(__dirname, file);
-        const destPath = path.join(__dirname, OUTPUT_DIR, file);
-
-        if (fs.existsSync(srcPath)) {
-            fs.copyFileSync(srcPath, destPath);
-            console.log(`   ✅ Copied: ${file}`);
-        }
-    });
-
-    // Copy directories recursively
-    dirsToCopy.forEach(dir => {
-        const srcPath = path.join(__dirname, dir);
-        const destPath = path.join(__dirname, OUTPUT_DIR, dir);
-
-        if (fs.existsSync(srcPath)) {
-            copyDirRecursive(srcPath, destPath);
-            console.log(`   ✅ Copied directory: ${dir}`);
-        }
-    });
-}
-
-/**
- * Recursively copy directory
- */
-function copyDirRecursive(src, dest) {
-    if (!fs.existsSync(dest)) {
-        fs.mkdirSync(dest, { recursive: true });
-    }
-
-    const entries = fs.readdirSync(src, { withFileTypes: true });
+function processDirectory(currentDir, relativePath = '') {
+    const entries = fs.readdirSync(currentDir, { withFileTypes: true });
 
     for (const entry of entries) {
-        const srcPath = path.join(src, entry.name);
-        const destPath = path.join(dest, entry.name);
+        const entryName = entry.name;
+        const entryPath = path.join(currentDir, entryName);
+        const entryRelativePath = path.join(relativePath, entryName);
+
+        // Check ignore list
+        if (IGNORE_LIST.includes(entryName)) {
+            continue;
+        }
+
+        const destPath = path.join(__dirname, OUTPUT_DIR, entryRelativePath);
 
         if (entry.isDirectory()) {
-            copyDirRecursive(srcPath, destPath);
+            // Create directory in dist
+            if (!fs.existsSync(destPath)) {
+                fs.mkdirSync(destPath, { recursive: true });
+            }
+            // Recurse
+            processDirectory(entryPath, entryRelativePath);
         } else {
-            fs.copyFileSync(srcPath, destPath);
+            // Ensure parent directory exists
+            const destDir = path.dirname(destPath);
+            if (!fs.existsSync(destDir)) {
+                fs.mkdirSync(destDir, { recursive: true });
+            }
+
+            // Special handling for service worker
+            if (entryName === 'workbox-service-worker.js') {
+                processServiceWorker(entryPath, destPath);
+            } else {
+                // Copy file
+                fs.copyFileSync(entryPath, destPath);
+                console.log(`   ✅ Copied: ${entryRelativePath}`);
+            }
         }
     }
 }
@@ -171,11 +113,8 @@ function copyDirRecursive(src, dest) {
 console.log('🔒 HTML Build Script\n');
 console.log('━'.repeat(50));
 
-// Process all HTML files
-HTML_FILES.forEach(processFile);
-
-// Copy other files
-copyOtherFiles();
+console.log('📦 Scanning and processing files...');
+processDirectory(__dirname);
 
 console.log('━'.repeat(50));
 console.log(`\n✨ Build complete! Files are in: ${OUTPUT_DIR}/`);
