@@ -6,10 +6,28 @@ export async function onRequest(context) {
     const SESSION_COOKIE = "admin_session";
     const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
+    // --- Handle Logout ---
+    if (url.pathname === "/admin/logout") {
+        return new Response("", {
+            status: 302,
+            headers: {
+                "Location": "/admin/login",
+                "Set-Cookie": `${SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict`
+            }
+        });
+    }
+
     // --- Check if session cookie is valid ---
     const cookies = request.headers.get("Cookie") || "";
     if (cookies.includes(`${SESSION_COOKIE}=${password}`)) {
-        return context.next(); // Already logged in
+        // If already logged in and trying to go to login page, redirect to admin
+        if (url.pathname === "/admin/login") {
+            return new Response("", {
+                status: 302,
+                headers: { "Location": "/admin" }
+            });
+        }
+        return context.next(); // Allow access
     }
 
     // --- Handle login POST ---
@@ -30,9 +48,12 @@ export async function onRequest(context) {
         return new Response("Wrong password", { status: 403 });
     }
 
-    // --- If no session: serve login page ---
-    if (url.pathname.startsWith("/admin")) {
-        return fetch("https://you.ge/admin/login.html");
+    // --- If no session and not on login page: redirect to login ---
+    if (url.pathname.startsWith("/admin") && url.pathname !== "/admin/login") {
+        return new Response("", {
+            status: 302,
+            headers: { "Location": "/admin/login" }
+        });
     }
 
     return context.next();
