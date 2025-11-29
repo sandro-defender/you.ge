@@ -68,7 +68,7 @@
         // Check if already authenticated
         async function checkAuth() {
             try {
-                const response = await fetch('/admin/check-auth', {
+                const response = await fetch('/api/check-auth', {
                     method: 'GET',
                     credentials: 'include'
                 });
