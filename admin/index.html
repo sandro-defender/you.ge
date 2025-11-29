@@ -4,206 +4,123 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin Dashboard | You.ge</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Admin Panel</title>
     <style>
-        :root {
-            --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-            --glass-bg: rgba(255, 255, 255, 0.05);
-            --glass-border: rgba(255, 255, 255, 0.1);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-            --text-primary: #ffffff;
-            --text-secondary: rgba(255, 255, 255, 0.7);
-            --success-color: #10b981;
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
         }
 
-        * {
-            margin: 0;
-            padding: 0;
+        .login-form {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .admin-content {
+            display: none;
+        }
+
+        input[type="password"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
             box-sizing: border-box;
         }
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: #0f172a;
-            min-height: 100vh;
-            color: var(--text-primary);
-            overflow-x: hidden;
-            position: relative;
-        }
-
-        /* Ambient Background */
-        body::before,
-        body::after {
-            content: '';
-            position: absolute;
-            width: 500px;
-            height: 500px;
-            border-radius: 50%;
-            filter: blur(120px);
-            opacity: 0.4;
-            z-index: -1;
-        }
-
-        body::before {
-            background: #6366f1;
-            top: -100px;
-            left: -100px;
-            animation: float 15s infinite alternate;
-        }
-
-        body::after {
-            background: #ec4899;
-            bottom: -100px;
-            right: -100px;
-            animation: float 15s infinite alternate-reverse;
-        }
-
-        @keyframes float {
-            0% {
-                transform: translate(0, 0);
-            }
-
-            100% {
-                transform: translate(50px, 50px);
-            }
-        }
-
-        .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 40px;
-            background: rgba(15, 23, 42, 0.6);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--glass-border);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .logo {
-            font-size: 1.5rem;
-            font-weight: 700;
-            background: var(--primary-gradient);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .logout-btn {
+        button {
+            background: #007bff;
+            color: white;
             padding: 10px 20px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid var(--glass-border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
 
-        .logout-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateY(-2px);
+        button:hover {
+            background: #0056b3;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 40px auto;
-            padding: 0 20px;
-        }
-
-        .dashboard-header {
-            margin-bottom: 40px;
-        }
-
-        .dashboard-header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-
-        .dashboard-header p {
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
-        }
-
-        .card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            border-radius: 20px;
-            padding: 30px;
-            transition: all 0.3s ease;
-        }
-
-        .card:hover {
-            transform: translateY(-5px);
-            background: rgba(255, 255, 255, 0.08);
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-        }
-
-        .card h3 {
-            font-size: 1.25rem;
-            margin-bottom: 15px;
-            color: var(--text-primary);
-        }
-
-        .card p {
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 6px 12px;
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--success-color);
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            margin-top: 15px;
+        .error {
+            color: red;
+            margin-top: 10px;
         }
     </style>
 </head>
 
 <body>
-    <nav class="navbar">
-        <div class="logo">You.ge Admin</div>
-        <a href="/admin/logout" class="logout-btn">Logout</a>
-    </nav>
-
-    <div class="container">
-        <div class="dashboard-header">
-            <h1>Welcome Back</h1>
-            <p>Manage your application settings and view reports.</p>
-        </div>
-
-        <div class="grid">
-            <div class="card">
-                <h3>System Status</h3>
-                <p>All systems are running smoothly. No issues detected in the last 24 hours.</p>
-                <div class="status-badge">Operational</div>
-            </div>
-
-            <div class="card">
-                <h3>Recent Activity</h3>
-                <p>View the latest user interactions and system logs from the past week.</p>
-            </div>
-
-            <div class="card">
-                <h3>Settings</h3>
-                <p>Configure general application settings, user permissions, and more.</p>
-            </div>
-        </div>
+    <div class="login-form" id="loginForm">
+        <h2>Admin Login</h2>
+        <input type="password" id="password" placeholder="Enter password">
+        <button onclick="login()">Login</button>
+        <p class="error" id="error"></p>
     </div>
+
+    <div class="admin-content" id="adminContent">
+        <h1>Admin Panel</h1>
+        <p>Welcome! You are authenticated.</p>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <script>
+        // Check if already authenticated
+        async function checkAuth() {
+            const response = await fetch('/admin/check-auth');
+            const data = await response.json();
+
+            if (data.authenticated) {
+                showAdminContent();
+            }
+        }
+
+        // Login function
+        async function login() {
+            const password = document.getElementById('password').value;
+            const errorDiv = document.getElementById('error');
+
+            try {
+                const response = await fetch('/admin/check-auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAdminContent();
+                } else {
+                    errorDiv.textContent = 'Wrong password!';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'Error: ' + error.message;
+            }
+        }
+
+        // Logout function
+        function logout() {
+            document.cookie = 'admin_session=; Path=/; Max-Age=0';
+            location.reload();
+        }
+
+        // Show admin content
+        function showAdminContent() {
+            document.getElementById('loginForm').style.display = 'none';
+            document.getElementById('adminContent').style.display = 'block';
+        }
+
+        // Enter key to login
+        document.getElementById('password').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                login();
+            }
+        });
+
+        // Check auth on page load
+        checkAuth();
+    </script>
 </body>
 
 </html>
