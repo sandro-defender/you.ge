@@ -107,6 +107,12 @@
                     body: JSON.stringify({ password })
                 });
 
+                // Handle 403 Forbidden (wrong password)
+                if (response.status === 403) {
+                    errorDiv.textContent = 'Incorrect password';
+                    return;
+                }
+
                 if (!response.ok) {
                     errorDiv.textContent = `Error: ${response.status}`;
                     return;
@@ -118,7 +124,7 @@
                     showAdminContent();
                     document.getElementById('password').value = '';
                 } else {
-                    errorDiv.textContent = data.error || 'Wrong password!';
+                    errorDiv.textContent = 'Incorrect password';
                 }
             } catch (error) {
                 errorDiv.textContent = 'Network error: ' + error.message;
@@ -127,9 +133,25 @@
         }
 
         // Logout function
-        function logout() {
-            document.cookie = 'admin_session=; Path=/; Max-Age=0';
-            location.reload();
+        async function logout() {
+            try {
+                const response = await fetch('/api/logout', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+
+                if (response.ok) {
+                    // Hide admin content and show login form
+                    document.getElementById('adminContent').style.display = 'none';
+                    document.getElementById('loginForm').style.display = 'block';
+                    document.getElementById('password').value = '';
+                    document.getElementById('error').textContent = '';
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Fallback: just reload the page
+                location.reload();
+            }
         }
 
         // Show admin content
