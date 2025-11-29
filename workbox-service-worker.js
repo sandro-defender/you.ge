@@ -19,6 +19,7 @@ const EXCLUDED_URLS = [
   'tracking',
   'gtag',
   'ga.js',
+  'functions/admin/check-auth.js',
   'analytics.js'
 ];
 
@@ -47,15 +48,15 @@ async function cleanupOldCaches() {
   try {
     const cacheNames = await caches.keys();
     const oldCaches = cacheNames.filter(name => {
-      return name.startsWith('pages-cache-') || 
-             name.startsWith('static-resources-') || 
-             name.startsWith('images-cache-') ||
-             name.startsWith('fonts-cache-') ||
-             name.startsWith('api-cache-') ||
-             name.startsWith('index-html-cache-');
+      return name.startsWith('pages-cache-') ||
+        name.startsWith('static-resources-') ||
+        name.startsWith('images-cache-') ||
+        name.startsWith('fonts-cache-') ||
+        name.startsWith('api-cache-') ||
+        name.startsWith('index-html-cache-');
       // Note: Workbox precache caches are handled by cleanupOutdatedCaches()
     });
-    
+
     await Promise.all(
       oldCaches.map(name => caches.delete(name))
     );
@@ -137,8 +138,8 @@ registerRoute(
 
 // StaleWhileRevalidate სტრატეგია index.html-ისთვის
 registerRoute(
-  ({ url, request }) => 
-    (url.pathname === '/' || url.pathname === '/index.html') && 
+  ({ url, request }) =>
+    (url.pathname === '/' || url.pathname === '/index.html') &&
     request.mode === 'navigate',
   new StaleWhileRevalidate({
     cacheName: 'index-html-cache-' + VERSION,
@@ -176,9 +177,9 @@ registerRoute(
   ({ request, url }) => {
     // Exclude analytics, beacons, and tracking scripts - double check
     if (isExcludedUrl(url)) return false;
-    const isStaticResource = request.destination === 'script' || 
-                             request.destination === 'style' ||
-                             url.pathname.match(/\.(js|css|mjs)$/i);
+    const isStaticResource = request.destination === 'script' ||
+      request.destination === 'style' ||
+      url.pathname.match(/\.(js|css|mjs)$/i);
     return isStaticResource;
   },
   new StaleWhileRevalidate({
@@ -199,9 +200,9 @@ registerRoute(
 registerRoute(
   ({ request, url }) => {
     if (isExcludedUrl(url)) return false;
-    const isAPI = request.destination === 'empty' && 
-                  (url.pathname.match(/\.(json|xml)$/i) || 
-                   url.pathname.startsWith('/api/'));
+    const isAPI = request.destination === 'empty' &&
+      (url.pathname.match(/\.(json|xml)$/i) ||
+        url.pathname.startsWith('/api/'));
     return isAPI;
   },
   new NetworkFirst({
@@ -223,8 +224,8 @@ registerRoute(
   ({ request, url }) => {
     // Exclude analytics and tracking images - double check
     if (isExcludedUrl(url)) return false;
-    const isImage = request.destination === 'image' || 
-                    url.pathname.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i);
+    const isImage = request.destination === 'image' ||
+      url.pathname.match(/\.(jpg|jpeg|png|gif|svg|webp|ico)$/i);
     return isImage;
   },
   new CacheFirst({
@@ -245,8 +246,8 @@ registerRoute(
 registerRoute(
   ({ request, url }) => {
     if (isExcludedUrl(url)) return false;
-    const isFont = request.destination === 'font' || 
-                   url.pathname.match(/\.(woff|woff2|ttf|otf|eot)$/i);
+    const isFont = request.destination === 'font' ||
+      url.pathname.match(/\.(woff|woff2|ttf|otf|eot)$/i);
     return isFont;
   },
   new CacheFirst({
@@ -275,7 +276,7 @@ self.addEventListener('message', (event) => {
         type: 'SW_VERSION',
         version: VERSION
       };
-      
+
       if (event.ports && event.ports[0]) {
         event.ports[0].postMessage(versionResponse);
       } else {

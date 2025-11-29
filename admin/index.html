@@ -67,11 +67,24 @@
     <script>
         // Check if already authenticated
         async function checkAuth() {
-            const response = await fetch('/admin/check-auth');
-            const data = await response.json();
+            try {
+                const response = await fetch('/admin/check-auth', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
 
-            if (data.authenticated) {
-                showAdminContent();
+                if (!response.ok) {
+                    console.error('Auth check failed:', response.status);
+                    return;
+                }
+
+                const data = await response.json();
+
+                if (data.authenticated) {
+                    showAdminContent();
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
             }
         }
 
@@ -79,23 +92,37 @@
         async function login() {
             const password = document.getElementById('password').value;
             const errorDiv = document.getElementById('error');
+            errorDiv.textContent = '';
+
+            if (!password) {
+                errorDiv.textContent = 'Please enter a password';
+                return;
+            }
 
             try {
                 const response = await fetch('/admin/check-auth', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
                     body: JSON.stringify({ password })
                 });
+
+                if (!response.ok) {
+                    errorDiv.textContent = `Error: ${response.status}`;
+                    return;
+                }
 
                 const data = await response.json();
 
                 if (data.success) {
                     showAdminContent();
+                    document.getElementById('password').value = '';
                 } else {
-                    errorDiv.textContent = 'Wrong password!';
+                    errorDiv.textContent = data.error || 'Wrong password!';
                 }
             } catch (error) {
-                errorDiv.textContent = 'Error: ' + error.message;
+                errorDiv.textContent = 'Network error: ' + error.message;
+                console.error('Login error:', error);
             }
         }
 
