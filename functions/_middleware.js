@@ -8,6 +8,7 @@ export async function onRequest(context) {
     "/dashboard",
     "/secret",
     "/you.ge/admin",
+    "/bar/*",
     "/private"
   ];
 
