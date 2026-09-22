@@ -15,6 +15,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { parseJsonc } from "./jsonc.mjs";
 
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const EXPECTED_DB_NAME = "you-ge-portfolio";
@@ -81,12 +82,12 @@ if (!Array.isArray(dbs) || dbs.length === 0) {
 let configured = null;
 const cfgPath = path.join(APP_DIR, "wrangler.jsonc");
 if (existsSync(cfgPath)) {
-	const raw = readFileSync(cfgPath, "utf8")
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/(^|[^:"'\\])\/\/.*$/gm, "$1")
-		.replace(/,(\s*[}\]])/g, "$1");
+	// String-aware JSONC parse (see scripts/jsonc.mjs). The old
+	// block-comment-then-line-comment regex order mis-read wrangler.jsonc's
+	// `/api/*` and `"0 */6 * * *"` and deleted the d1_databases block, so this
+	// script always reported "not configured" even when it was.
 	try {
-		configured = JSON.parse(raw)?.d1_databases?.[0] ?? null;
+		configured = parseJsonc(readFileSync(cfgPath, "utf8"))?.d1_databases?.[0] ?? null;
 	} catch {
 		configured = null;
 	}

@@ -29,6 +29,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { parseJsonc } from "./jsonc.mjs";
 
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -85,18 +86,20 @@ function wranglerJson(args) {
 	return parseWranglerJson(stdout);
 }
 
-/** wrangler.jsonc allows comments and trailing commas — strip both. */
+/** wrangler.jsonc allows comments and trailing commas — strip both safely. */
 function readWranglerConfig() {
 	const file = path.join(APP_DIR, "wrangler.jsonc");
 	if (!existsSync(file)) {
 		fail([`Missing ${bold("wrangler.jsonc")} in ${APP_DIR}`]);
 	}
-	const withoutComments = readFileSync(file, "utf8")
-		.replace(/\/\*[\s\S]*?\*\//g, "")
-		.replace(/(^|[^:"'\\])\/\/.*$/gm, "$1");
-	const withoutTrailingCommas = withoutComments.replace(/,(\s*[}\]])/g, "$1");
+	// NOTE: parseJsonc (scripts/jsonc.mjs) is a string-aware scanner. Do NOT
+	// "simplify" it back to block-comment-then-line-comment regexes: wrangler.jsonc
+	// legitimately contains `/api/*` inside a `//` comment and `"0 */6 * * *"`
+	// inside a string, and that regex order silently deletes `main`,
+	// `d1_databases` and `triggers` before any guard runs — turning this script
+	// into a parse error that never reaches checks 1–4.
 	try {
-		return JSON.parse(withoutTrailingCommas);
+		return parseJsonc(readFileSync(file, "utf8"));
 	} catch (err) {
 		fail([`Could not parse ${bold("wrangler.jsonc")}: ${err.message}`]);
 	}
