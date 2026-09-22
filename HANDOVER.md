@@ -9,9 +9,10 @@ contradict popular tutorials; each one says why and how it was verified.
 ## 0. Note for the next agent (read before touching anything)
 
 > **Branch discipline:** work on whatever `git branch --show-current` says
-> (session-bound, e.g. `arena/01a0c776-you-ge`); push only to that branch.
-> The user's original prompt named `01a0c71b` — that was PR #1, already
-> merged; do not resurrect it.
+> (session-bound — e.g. `arena/01a0c776-you-ge`, `arena/01a0c7a2-you-ge`);
+> push only to that branch. The user's prompts sometimes name a previous
+> session's branch (e.g. `01a0c71b` = PR #1, `01a0c776` = PR #2, both merged)
+> — do not resurrect those; use the session branch.
 >
 > **Goal:** a modern gated portfolio for you.ge on **Cloudflare Workers Free +
 > D1 only**: GitHub projects with descriptions, Google OAuth sign-in, per-user
@@ -19,12 +20,18 @@ contradict popular tutorials; each one says why and how it was verified.
 > re-litigate): TanStack Start (React SSR) + Hono + better-auth 1.7.5 +
 > Drizzle + D1, one Worker. Reasoning is in §2.
 >
-> **Hard constraints (all standing):**
-> 1. Never touch, create, migrate, or read any D1 database in the user's
->    Cloudflare account. Local Miniflare SQLite (`--local`) only, never
->    `--remote`. `scripts/d1-safety-check.mjs` must not be weakened.
-> 2. Modify nothing outside `app/`. The casino/games files at the repo root
->    stay untouched.
+> **Hard constraints (all standing, owner-updated 2026-09-22):**
+> 1. In the user's Cloudflare account, create/migrate ONLY a D1 database
+>    whose name starts with the prefix **`you.ge`** (recommended:
+>    `you.ge-portfolio`). Never read/modify any other remote DB. Local
+>    Miniflare SQLite (`--local`) is always fine. Never run anything with
+>    `--remote` against a database that fails the prefix or empty checks.
+>    `scripts/d1-safety-check.mjs` enforces the prefix + empty rules and must
+>    not be weakened (its `d1 execute --json` parse is deliberately
+>    fail-closed — keep it that way).
+> 2. Layout (owner-settled): **the project lives at the repo root** — there is
+>    no `app/` folder and the old casino/games site files are removed (they
+>    exist only in git history). Do not reintroduce files outside the project.
 > 3. Verify APIs against the *installed packages* (node_modules, or by probing
 >    at runtime), not docs/memory. better-auth 1.7.5 differs greatly from the
 >    1.4.x era most tutorials describe — see §7 for traps already paid for.
@@ -33,15 +40,17 @@ contradict popular tutorials; each one says why and how it was verified.
 >    do not redesign it (details in §3, architecture notes in §4b).
 >
 > **What is done:** everything under §3 "✅ Done and verified", including the
-> role gate, the `/api/auth` path-prefix bugfix, `README.md`, and a 20/20
-> green `scripts/role-matrix-smoke.sh`. A local dev server runs with a seeded
-> 3-user fixture (`user`/`member`/`admin`).
+> role gate, the `/api/auth` path-prefix bugfix, `README.md`, a 20/20 green
+> `scripts/role-matrix-smoke.sh`, and the R1 local-prep session (root layout,
+> `you.ge` prefix safety rule, `grant-admin.mjs`, owner deploy runbook).
 >
-> **What is NOT done:** production deploy, Google OAuth credentials, a real
-> admin user, GitHub sync proven against a remote DB. The step-by-step
-> **ROADMAP in §6** is ordered — start at R1 only when the previous step's
-> acceptance criteria are met. Each Ri is sized to ~60% of one agent context
-> window: do it, verify, commit, stop; leave the rest to the next agent.
+> **What is NOT done:** the remote half of R1 (owner-run runbook in README —
+> this sandbox has no Cloudflare credentials), Google OAuth credentials,
+> a real admin user, GitHub sync proven against a remote DB. The step-by-step
+> **ROADMAP in §6** is ordered — start at R1's remainder (or R2) only when the
+> previous step's acceptance criteria are met. Each Ri is sized to ~60% of one
+> agent context window: do it, verify, commit, stop; leave the rest to the
+> next agent.
 >
 > After any change: re-run §5 (tsc, build, leak check, smoke, role matrix).
 
@@ -49,12 +58,14 @@ contradict popular tutorials; each one says why and how it was verified.
 
 ## 1. What this is
 
-The repo root is the user's **existing** Cloudflare Pages site (a casino/games
-example: `index.html`, `games/`, `functions/`). The user said those are all
-examples. Everything new lives in **`app/`**, a self-contained Worker project.
-
-Nothing outside `app/` has been modified — `git diff --stat HEAD` is empty and
-`git status` shows only `?? app/`.
+A modern gated portfolio for you.ge, deployed as **one Cloudflare Worker**
+(Workers Free + D1 only). **Layout (owner-settled 2026-09-22): the project
+lives at the repo root** — this directory is the whole project. The old
+Cloudflare Pages casino/games example that used to sit at the root
+(`index.html`, `functions/`, `img/`, `build*.js`, …) was removed in the
+R1-prep session ("chore: move project to repo root, remove legacy
+casino/games site"); it survives only in git history. Do not reintroduce
+files outside the project.
 
 Requirements, verbatim from the user:
 
@@ -100,6 +111,32 @@ Requirements, verbatim from the user:
 - Local D1 migration applied (7 tables, 7 indexes). Stale-`dist` bug fixed
   long ago: `wrangler.jsonc` `main = "src/server.ts"`, never build output.
 - **`README.md`** written — deploy runbook, architecture, env vars, safety.
+- **R1-prep session (2026-09-22, branch `arena/01a0c7a2-you-ge`)** — what
+  finished, what broke, what surprised:
+  - Layout settled: `app/` moved to the repo root, legacy casino/games site
+    removed (owner's standing instruction; recoverable from git history).
+  - **`you.ge` prefix rule finished** in `scripts/d1-safety-check.mjs`
+    (prefix `you.ge` + recommended `you.ge-portfolio`) and mirrored in
+    `scripts/d1-setup.mjs` / `grant-admin.mjs` / `wrangler.jsonc` /
+    `package.json`. Verified: placeholder id still blocks (exit 1), old name
+    `you-ge-portfolio` and unrelated names rejected at check 1, `you.ge*`
+    passes the prefix then stops at the id check. Migrate scripts now target
+    the **binding** `DB` (wrangler resolves "name or binding") so they can
+    never drift from `wrangler.jsonc`.
+  - **What broke:** `wrangler d1 execute --json` returns a TOP-LEVEL ARRAY
+    `[{results,…}]` (runtime-probed). The safety script's empty-check parse
+    (`res?.results?.[0]?.results`) saw `[]` on every output and would have
+    **reported a non-empty database as empty**. Fixed fail-closed
+    (`d1Rows()` — unknown envelope aborts). `d1 info --json` is a bare
+    `{uuid,name,…}` object (verified in wrangler 4.136.1 `cli.js`).
+  - **What surprised:** the better-auth CLI's `create-admin` **cannot work**
+    in this project (new §7 fact 13). Replaced by `scripts/grant-admin.mjs`
+    (`npm run auth:grant-admin`) — same `user.role` UPDATE better-auth's
+    setRole performs, run through `wrangler d1 execute`, prefix-checked like
+    the safety script. Round-trip tested locally (grant member → revoke
+    user). Remote half of R1 is an owner-run runbook (README "First deploy"):
+    this sandbox has **no Cloudflare credentials** (`wrangler whoami`:
+    "You are not authenticated") and the owner chose runbook-only.
 - **Access model implemented** (user decision: role check / `member` role):
   - `src/lib/roles.ts` — leaf module: `ROLES`, `hasRole()` (fail-closed,
     comma-split), `PROJECT_ROLES`, `ADMIN_ROLES`.
@@ -131,8 +168,10 @@ Requirements, verbatim from the user:
 
 ### ❌ Not done (→ §6 ROADMAP)
 
-- Never deployed; `database_id` still placeholder; no Google OAuth creds;
-  no real admin user.
+- `database_id` still placeholder (owner runs the README "First deploy"
+  runbook: `d1 create you.ge-portfolio` → paste uuid → `d1:safety` →
+  `db:migrate:remote` → secrets → `deploy`). No Google OAuth creds yet (R2);
+  no real admin row yet (grant-admin needs the owner's first Google sign-in).
 - `?next=` post-login redirect untested end-to-end (needs real Google).
 - Error-boundary route, SEO/OG tags: not started.
 
@@ -228,18 +267,19 @@ Runtime facts verified against installed better-auth 1.7.5 source:
 ## 5. Verification — re-run after every change
 
 ```bash
-cd app
 npx tsc --noEmit                 # expect: 0 errors
 rm -rf dist && npx vite build    # expect: success (rm first: empty-dist = false-clean leak check)
 npm run d1:safety                # expect: exit 1, BLOCKED on placeholder id
+                                 #         (exit 0 only after a real you.ge* id is pasted)
 # leak check — every line must say clean:
 for n in drizzle api.github.com BETTER_AUTH_SECRET sqlite_master D1Database; do
   printf '%-22s ' "$n"; grep -rqi "$n" dist/client/ && echo FOUND || echo clean
 done
 # dev server (loads .dev.vars automatically), then:
 npx vite dev &
+node scripts/seed-local-test-users.mjs > /tmp/seed.sql
+npx wrangler d1 execute DB --local --file /tmp/seed.sql   # only if fixtures missing
 bash scripts/role-matrix-smoke.sh          # expect: pass=20 fail=0
-node scripts/seed-local-test-users.mjs --cookies   # only if fixtures missing
 ```
 
 > `better-auth` WILL appear in `dist/client/` — that's the legitimate client
@@ -302,29 +342,37 @@ what surprised you) → stop.
 
 ---
 
-### R1 — First production deploy (no OAuth yet)  ·  est. ~60% of budget
+### R1 — First production deploy (no OAuth yet)  ·  est. ~60% of budget  ·  ~90% done
 
 *Touches:* `wrangler.jsonc`, Cloudflare dashboard, `.dev.vars`→secrets.
-*Read first:* §8 (safety), README "Deploy runbook", §0 constraints.
+*Read first:* §8 (safety), README "First deploy" (the runbook), §0 constraints.
 
-1. Confirm with the user before ANY account command (constraint #1 stands).
-2. `npm run d1:setup` (read-only listing) → user runs
-   `npx wrangler d1 create you-ge-portfolio` → paste uuid into
-   `wrangler.jsonc` `database_id`.
+1. Owner confirmation for account commands is IN the session prompt that
+   commissioned R1 ("create the you.ge* D1 DB … deploy"), constrained by the
+   prefix + empty checks. The agent sandbox has **no Cloudflare credentials**
+   — the owner runs the remote commands from README "First deploy" (chosen:
+   runbook-only).
+2. `npm run d1:setup` (read-only listing) → owner runs
+   `npx wrangler d1 create you.ge-portfolio` (prefix rule!) → pastes the uuid
+   into `wrangler.jsonc` `database_id`.
 3. `npm run d1:safety` must now **pass** (it only ever passed-exit-0 with a
-   real id + empty DB) → `npm run db:migrate:remote` (still chains the guard).
-4. `npx wrangler secret put BETTER_AUTH_SECRET` (openssl rand -base64 32),
-   `GOOGLE_CLIENT_SECRET`, `GITHUB_TOKEN` (fine-grained, read-only repo).
-5. `npm run auth:create-admin` → the owner's Google email gets `role=admin`
-   **on the remote D1** (requires their Google sign-in to have happened — if
-   not yet, create the row after R2 and re-run).
+   real id + empty DB) → `npm run db:migrate:remote` (still chains the guard;
+   migrates via binding `DB`).
+4. `npx wrangler secret put BETTER_AUTH_SECRET` (`openssl rand -base64 32`),
+   then in R2 `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, and optionally
+   `GITHUB_TOKEN` (fine-grained, read-only repo) in R3.
+5. Admin bootstrap: NOT `auth create-admin` (§7 fact 13 — the CLI cannot
+   reach D1 from Node). After the owner's first Google sign-in (R2) run
+   `node scripts/grant-admin.mjs <owner-email>` — prefix-checked
+   `user.role = 'admin'` UPDATE via `wrangler d1 execute`.
 6. `npm run deploy` → hit `https://you.ge/api/health` and
-   `/api/auth/get-session` (must be 200, not 404).
+   `/api/auth/get-session` (must be 200, not 404). `wrangler.jsonc` carries
+   `"routes": [{ "pattern": "you.ge", "custom_domain": true }]` — if the zone
+   is not in the account, deploy without it and use workers.dev meanwhile.
 
-*Acceptance:* site up, health 200, auth endpoints 200 (404 here = the §3
-prefix bug regressed), migration table present on remote, local tests still
-20/20. *Likely time sink:* wrangler auth / account-id confusion — ask the
-user rather than improvising credentials.
+*Status:* local half done + runbook written (2026-09-22); remote half awaits
+the owner's runbook run. *Likely time sink:* wrangler auth / account-id
+confusion — ask the user rather than improvising credentials.
 
 ---
 
@@ -341,8 +389,9 @@ possibly `auth.ts` config if callback shape surprises.
 3. Local first: `npx vite dev` → `/login` → full Google round-trip → land on
    `/login?next=…` target → `user` role row created in local D1 → `/projects`
    shows the **403 grant message** (correct for a fresh account!).
-4. Then on prod. Admin panel → `/admin/users` → set owner to `admin` if the
-   R1 create-admin ran before sign-up existed; set a second test account to
+4. Then on prod. Admin panel → `/admin/users` → or, if the R1 grant-admin ran
+   before sign-up existed, run `node scripts/grant-admin.mjs <owner-email>`
+   after the first sign-in; set a second test account to
    `member` → `/projects` 200; revoke back to `user` → 403.
 5. Verify cookieCache lag (~5 min) is acceptable or document it in README.
 
@@ -502,7 +551,8 @@ Each was verified against the installed packages, not memory.
 5. **The admin plugin has TWO authorization layers** — your middleware *and* its
    internal DB check `user.role === "admin"`. Granting admin only via an env
    allowlist yields 403 on every `/api/auth/admin/*` call while your own routes
-   work. Bootstrap with `npm run auth:create-admin`.
+   work. Bootstrap the first admin with `node scripts/grant-admin.mjs`
+   (NOT the better-auth CLI — see fact 13).
 
 6. **Do not use `secondaryStorage` (KV) for sessions.** better-auth checks it
    *before* the DB and short-circuits on a hit, so a KV-backed session is served
@@ -532,6 +582,16 @@ Each was verified against the installed packages, not memory.
 
 12. **`startHandler.fetch(request)` takes 1 arg**, not the Worker triple.
 
+13. **better-auth CLI's `create-admin` cannot bootstrap this project** —
+    verified against the installed `auth@1.7.5` (`node_modules/auth/dist`):
+    `getConfig` demands *"default export your auth instance or … a variable
+    named auth"* and reads `config.options` — `src/lib/auth.ts` exports a
+    `createAuth(env)` **factory**, so the CLI fails with "Couldn't read your
+    auth config". Even with an instance it writes through the better-auth
+    adapter = Drizzle over a **D1 binding**, which cannot exist in a Node
+    process. Use `scripts/grant-admin.mjs` (wrangler-backed `user.role`
+    UPDATE — what setRole does under the hood, §4b).
+
 ---
 
 ## 8. D1 safety — non-negotiable
@@ -539,10 +599,13 @@ Each was verified against the installed packages, not memory.
 `scripts/d1-safety-check.mjs` runs before any remote migration
 (`npm run db:migrate:remote` chains it with `&&`). It refuses unless:
 
-1. `database_name === "you-ge-portfolio"` (a deliberately unusual name so it
+1. `database_name` starts with the reserved prefix **`you.ge`** (owner rule;
+   recommended concrete name `you.ge-portfolio` — an unusual prefix so it
    cannot collide with an existing database), and
 2. that name resolves to the configured `database_id`, and
-3. the target contains **no user tables**.
+3. the target contains **no user tables** — and the `d1 execute --json` row
+   parse (`d1Rows`) is fail-closed: an unrecognised output envelope aborts
+   instead of passing "empty".
 
 Why it exists: `wrangler d1 migrations apply --remote` records applied migrations
 in the target's `d1_migrations` table. Point it at a database you already use and
@@ -561,10 +624,11 @@ human to run. No script in this repo creates or migrates a database on its own.
 ## 9. File map
 
 ```
-app/
+.                              ← repo root = the whole project (owner-settled)
 ├── HANDOVER.md                    ← this file
 ├── package.json                   scripts: dev/build/deploy/db:*/d1:*/auth:*
-├── wrangler.jsonc                 main=src/server.ts, D1 binding, cron */6h
+├── wrangler.jsonc                 main=src/server.ts, D1 binding (name you.ge*),
+│                                  cron */6h, you.ge custom-domain route
 ├── vite.config.ts                 cloudflare({viteEnvironment:{name:"ssr"}}) FIRST
 ├── tsconfig.json                  types: ["node","vite/client"] — NOT workers-types
 ├── drizzle.config.ts              dialect sqlite, no dbCredentials (correct)
@@ -573,8 +637,9 @@ app/
 ├── .gitignore                     ignores .dev.vars, dist/, .wrangler/, .output/
 ├── README.md                      deploy runbook + architecture (§5, R1–R2)
 ├── scripts/
-│   ├── d1-safety-check.mjs        migration guard (§8)
+│   ├── d1-safety-check.mjs        migration guard (§8) — fail-closed row parse
 │   ├── d1-setup.mjs               read-only DB listing (§8)
+│   ├── grant-admin.mjs            role grant/revoke via wrangler d1 (§7.13)
 │   ├── jsonc.mjs                  string-aware wrangler.jsonc parser (§3)
 │   ├── seed-local-test-users.mjs  fixtures + --cookies (§5)
 │   └── role-matrix-smoke.sh       20-check E2E gate test (§5)
