@@ -18,7 +18,9 @@ import path from "node:path";
 import { parseJsonc } from "./jsonc.mjs";
 
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const EXPECTED_DB_NAME = "you-ge-portfolio";
+// Keep in sync with scripts/d1-safety-check.mjs and scripts/grant-admin.mjs.
+const DB_NAME_PREFIX = "you.ge";
+const RECOMMENDED_DB_NAME = "you.ge-portfolio";
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 const green = (s) => `\x1b[32m${s}\x1b[0m`;
@@ -68,8 +70,9 @@ if (!Array.isArray(dbs) || dbs.length === 0) {
 	for (const db of dbs) {
 		const name = String(db.name ?? "?");
 		const uuid = String(db.uuid ?? "?");
-		const marker =
-			name === EXPECTED_DB_NAME ? green(" ← this project") : yellow(" ← DO NOT TOUCH");
+		const marker = name.startsWith(DB_NAME_PREFIX)
+			? green(" ← this project's reserved prefix")
+			: yellow(" ← DO NOT TOUCH");
 		console.log(`  ${name.padEnd(nameWidth)}  ${dim(uuid)}${marker}`);
 	}
 	console.log(
@@ -93,10 +96,11 @@ if (existsSync(cfgPath)) {
 	}
 }
 
-const alreadyExists = dbs.some((d) => d.name === EXPECTED_DB_NAME);
+const existingForUs = dbs.filter((d) => String(d.name ?? "").startsWith(DB_NAME_PREFIX));
 const configuredCorrectly =
 	configured &&
-	configured.database_name === EXPECTED_DB_NAME &&
+	typeof configured.database_name === "string" &&
+	configured.database_name.startsWith(DB_NAME_PREFIX) &&
 	configured.database_id &&
 	!/REPLACE|CHANGE|YOUR_/i.test(configured.database_id);
 
@@ -105,34 +109,44 @@ console.log("─".repeat(64));
 
 if (configuredCorrectly) {
 	console.log(`  ${green("✔ wrangler.jsonc is already configured correctly.")}`);
-	console.log(`    database_name: ${EXPECTED_DB_NAME}`);
+	console.log(`    database_name: ${configured.database_name}`);
 	console.log(`    database_id:   ${configured.database_id}`);
 	console.log(`\n  You can run ${bold("npm run db:migrate:remote")} (it re-verifies first).\n`);
 	process.exit(0);
 }
 
-if (alreadyExists) {
-	const existing = dbs.find((d) => d.name === EXPECTED_DB_NAME);
-	console.log(`  A database named ${bold(EXPECTED_DB_NAME)} already exists.`);
-	console.log(`  If YOU created it for this project, paste its id into wrangler.jsonc:`);
-	console.log(`\n    "database_id": "${green(existing.uuid)}"\n`);
+if (existingForUs.length > 0) {
+	console.log(
+		`  ${bold("A database with this project's reserved prefix already exists:")}`,
+	);
+	for (const d of existingForUs) {
+		console.log(`\n    ${bold(d.name)}  ${dim(d.uuid)}`);
+	}
+	console.log(
+		`\n  If YOU created ${bold(RECOMMENDED_DB_NAME)} for this project, paste its id into wrangler.jsonc:`,
+	);
+	console.log(`\n    "database_id": "${green(existingForUs[0].uuid)}"\n`);
 	console.log(`  If you did ${bold("not")} create it for this project, pick a different name`);
-	console.log(`  by editing ${bold("EXPECTED_DB_NAME")} in BOTH:`);
+	console.log(`  that still starts with "${DB_NAME_PREFIX}" by editing`);
+	console.log(`  ${bold("DB_NAME_PREFIX / RECOMMENDED_DB_NAME")} in ALL of:`);
 	console.log(`    scripts/d1-safety-check.mjs`);
-	console.log(`    scripts/d1-setup.mjs\n`);
+	console.log(`    scripts/d1-setup.mjs`);
+	console.log(`    scripts/grant-admin.mjs\n`);
 	process.exit(0);
 }
 
 console.log(`  Create a NEW database dedicated to this project:`);
-console.log(`\n    ${bold(green(`npx wrangler d1 create ${EXPECTED_DB_NAME}`))}\n`);
+console.log(`\n    ${bold(green(`npx wrangler d1 create ${RECOMMENDED_DB_NAME}`))}\n`);
 console.log(`  It prints a database_id. Paste that into ${bold("wrangler.jsonc")}:`);
 console.log(`\n    "d1_databases": [{`);
 console.log(`      "binding":       "DB",`);
-console.log(`      "database_name": "${EXPECTED_DB_NAME}",`);
+console.log(`      "database_name": "${RECOMMENDED_DB_NAME}",`);
 console.log(`      "database_id":   "${green("<paste the uuid here>")}"`);
 console.log(`    }]`);
 console.log(`\n  Then run ${bold("npm run db:migrate:remote")}.`);
 console.log(
 	dim(`  That command runs scripts/d1-safety-check.mjs first and will refuse to`),
 );
-console.log(dim(`  proceed unless the target is "${EXPECTED_DB_NAME}" and completely empty.\n`));
+console.log(
+	dim(`  proceed unless the target starts with "${DB_NAME_PREFIX}" and is completely empty.\n`),
+);

@@ -4,7 +4,9 @@
  * SQLite D1 (wrangler --local) and prints signed session cookies for each.
  *
  * NEVER run anything with --remote. This script only generates SQL + cookies;
- * applying them is done by `wrangler d1 execute you-ge-portfolio --local`.
+ * applying them is done by `wrangler d1 execute DB --local --file /tmp/seed.sql`
+ * (`DB` = the binding name in wrangler.jsonc — wrangler resolves a name OR a
+ * binding, and passing the binding can never drift from the configured DB).
  *
  * Cookies are signed exactly the way better-auth/hono serialize signed
  * cookies (verified against installed hono/dist/utils/cookie.js):
@@ -15,7 +17,7 @@
  * Usage:
  *   node scripts/seed-local-test-users.mjs > /tmp/seed.sql          # SQL
  *   node scripts/seed-local-test-users.mjs --cookies               # cookie header lines
- *   npx wrangler d1 execute you-ge-portfolio --local --file /tmp/seed.sql
+ *   npx wrangler d1 execute DB --local --file /tmp/seed.sql
  */
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";

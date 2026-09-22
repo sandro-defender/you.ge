@@ -14,15 +14,16 @@ operator/manual reference. **Every “contradicts tutorials” fact below was
 verified against the installed packages in `node_modules` (or by probing at
 runtime), not from docs or memory.**
 
+The project lives at the repo root — this directory is the whole project.
+
 ---
 
 ## Quick start
 
 ```bash
-cd app
 npm ci
-npx wrangler d1 migrations apply you-ge-portfolio --local   # local Miniflare SQLite only
-npx vite dev                                                # http://localhost:3000
+npm run db:migrate:local    # local Miniflare SQLite only (binding "DB")
+npx vite dev                 # http://localhost:3000
 ```
 
 Copy `.dev.vars.example` → `.dev.vars` and fill in the secrets before sign-in
@@ -41,7 +42,7 @@ Other everyday commands:
 | `npm run db:migrate:local` | Apply `drizzle/` migrations to the **local** Miniflare DB |
 | `npm run db:generate` | Generate a migration from schema changes (drizzle-kit) |
 | `npm run db:studio` | Drizzle Studio (local DB) |
-| `npm run auth:create-admin` | Bootstrap the first `role = "admin"` user (better-auth CLI) |
+| `npm run auth:grant-admin` | Grant/revoke a role for a signed-in user (`node scripts/grant-admin.mjs you@example.com`) — **not** the better-auth CLI (see HANDOVER §7) |
 | `npm run auth:info` | Print better-auth runtime info |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` from `wrangler.jsonc` |
 | `npm run deploy` | `vite build` + `wrangler deploy -c dist/server/wrangler.json` |
@@ -127,7 +128,7 @@ Three roles live in `src/lib/roles.ts` / `src/lib/auth-roles.ts`:
 |---|---|---|
 | `user` | Google sign-in (default) | nothing gated |
 | `member` | admin sets it in `/admin/users` | `/projects`, `/api/projects` |
-| `admin` | `npm run auth:create-admin` | everything member can + `/admin*` |
+| `admin` | `node scripts/grant-admin.mjs <email>` (after first Google sign-in) | everything member can + `/admin*` |
 
 Enforced in **two places that must agree**: `ACCESS_POLICY` in `src/server.ts`
 (pages) and `requireMember`/`requireAdmin` in `src/server/guard.ts` (API).
@@ -136,21 +137,31 @@ setRole submissions, drives `hasPermission`) and `adminClient({ roles })`
 (client — widens `setRole` types to include `member`). Verify with
 `scripts/role-matrix-smoke.sh` (20 checks: no-session, user, member, admin).
 
+Admin bootstrap: sign in with Google once (creates the `user` row), then
+`node scripts/grant-admin.mjs you@example.com` — a `user.role` UPDATE through
+`wrangler d1 execute`, exactly what better-auth's own `setRole` does under the
+hood. The better-auth CLI's `create-admin` **cannot** work against this
+factory-based D1 config (HANDOVER §7).
+
 ---
 
 ## D1 safety — non-negotiable
 
 **Never create, read, migrate, or touch any D1 database in the Cloudflare
-account except this project's own brand-new `you-ge-portfolio`. Local
-Miniflare SQLite (`--local`) is fine. Never run anything with `--remote`
-yourself.**
+account except a brand-new one whose name starts with the reserved prefix
+`you.ge` (recommended: `you.ge-portfolio`). Local Miniflare SQLite (`--local`)
+is fine. Never run anything with `--remote` against a database that fails the
+prefix or empty checks.**
 
 * `scripts/d1-safety-check.mjs` runs automatically before
   `npm run db:migrate:remote` and refuses unless:
-  1. `database_name === "you-ge-portfolio"` (deliberately unusual, cannot
-     collide with an existing DB),
+  1. `database_name` starts with `you.ge` (owner-settled prefix rule),
   2. that name resolves to the configured `database_id`,
-  3. the target has **no user tables**.
+  3. the target has **no user tables** (the `d1 execute --json` envelope parse
+     is fail-closed: an unrecognised output shape aborts rather than passing).
+* The migrate scripts use the **binding name** `DB`, so they always follow
+  `wrangler.jsonc` (wrangler resolves "the name or binding of the DB") — no
+  hardcoded name to drift from the config.
 * Its JSONC parsing uses `scripts/jsonc.mjs` — a **string-aware scanner**.
   Do not “simplify” it back to regexes: `wrangler.jsonc` contains `/api/*`
   inside a `//` comment and the cron `"0 */6 * * *"` inside a string, and a
@@ -168,18 +179,31 @@ yourself.**
 
 ## First deploy (owner-run — needs the real Cloudflare account)
 
+Run from the repo root, in order. The D1 name must start with the reserved
+prefix `you.ge` (recommended concrete name: `you.ge-portfolio` — the scripts
+enforce the prefix; see [D1 safety](#d1-safety)):
+
 ```bash
 npm run d1:setup                                   # read-only: lists existing DBs
-npx wrangler d1 create you-ge-portfolio            # NEW database
+npx wrangler d1 create you.ge-portfolio            # NEW database (prefix rule)
 # paste the printed uuid into wrangler.jsonc "database_id"
-npm run d1:safety                                  # must pass now (no longer exit 1)
+npm run d1:safety                                  # must pass now (exit 0)
 npm run db:migrate:remote                          # chains the safety check first
-npx wrangler secret put BETTER_AUTH_SECRET
-npx wrangler secret put GOOGLE_CLIENT_SECRET
-npx wrangler secret put GITHUB_TOKEN                # optional; sync degrades without it
-npm run auth:create-admin
-npm run deploy
+npx wrangler secret put BETTER_AUTH_SECRET         # generate: openssl rand -base64 32
+# R2:  npx wrangler secret put GOOGLE_CLIENT_ID && npx wrangler secret put GOOGLE_CLIENT_SECRET
+# R3:  npx wrangler secret put GITHUB_TOKEN        # optional; sync degrades without it
+npm run deploy                                     # vite build + wrangler deploy
+curl -s -o /dev/null -w '%{http_code}\n' https://you.ge/api/health           # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://you.ge/api/auth/get-session # 200
+# admin bootstrap AFTER the owner's first Google sign-in:
+node scripts/grant-admin.mjs you@example.com
 ```
+
+`wrangler.jsonc` contains `"routes": [{ "pattern": "you.ge", "custom_domain": true }]`
+so the Worker answers at `https://you.ge` (the better-auth/Google origin).
+If `wrangler deploy` reports the zone is not in the account, either add the
+`you.ge` zone to Cloudflare or remove that block and use the
+`you-ge.<account>.workers.dev` URL meanwhile.
 
 ### Secrets
 
@@ -239,7 +263,9 @@ Each was verified against the installed packages. **Do not “fix” these.**
 5. **The admin plugin has TWO authorization layers** — your middleware *and*
    its internal DB check `user.role === "admin"`. Granting admin only via an
    env allowlist yields 403 on every `/api/auth/admin/*` call while your own
-   routes work. Bootstrap with `npm run auth:create-admin`.
+   routes work. Bootstrap the first admin with `node scripts/grant-admin.mjs`
+   **after their first Google sign-in**. (The better-auth CLI's
+   `create-admin` cannot reach this app's database at all — see HANDOVER §7.)
 
 6. **Do not use `secondaryStorage` (KV) for sessions.** better-auth checks it
    *before* the DB and short-circuits on a hit, so a KV-backed session is
@@ -307,11 +333,11 @@ Each was verified against the installed packages. **Do not “fix” these.**
 ## Layout
 
 ```
-app/
+.                              ← repo root = the whole project
 ├── HANDOVER.md                 ← full handover: state, architecture, research notes
 ├── README.md                   ← this file
 ├── package.json                scripts (see Quick start)
-├── wrangler.jsonc              main=src/server.ts, D1 binding, cron */6h, vars
+├── wrangler.jsonc              main=src/server.ts, D1 binding, cron */6h, you.ge route
 ├── vite.config.ts              cloudflare() FIRST, then tanstackStart(), react(),
 │                               then the client-only better-auth env stub plugin
 ├── tsconfig.json               types: ["node","vite/client"] — NOT workers-types
@@ -321,6 +347,9 @@ app/
 ├── scripts/
 │   ├── d1-safety-check.mjs     migration guard (runs before any --remote)
 │   ├── d1-setup.mjs            read-only DB listing
+│   ├── grant-admin.mjs         role grant/revoke via wrangler d1 (admin bootstrap)
+│   ├── seed-local-test-users.mjs  local fixtures + --cookies
+│   ├── role-matrix-smoke.sh    20-check E2E gate test
 │   └── jsonc.mjs               string-aware wrangler.jsonc parser (shared)
 ├── drizzle/                    migrations (drizzle-kit output)
 └── src/
