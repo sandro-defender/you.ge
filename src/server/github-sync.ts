@@ -42,6 +42,7 @@ type GitHubRepo = {
 	stargazers_count: number;
 	forks_count: number;
 	open_issues_count: number;
+	archived?: boolean;
 	topics?: string[];
 	pushed_at: string | null;
 	created_at: string | null;
@@ -106,8 +107,30 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 		return;
 	}
 
-	if (fetched.length === 0) {
-		await log("ok", 0, "GitHub returned no public repos");
+	// Archived repositories are not portfolio projects. Filtering them here also
+	// prevents an archive/unarchive cycle from changing curation unexpectedly.
+	const active = fetched.filter((repo) => repo.archived !== true);
+	if (active.length === 0) {
+		await log("ok", 0, fetched.length === 0 ? "GitHub returned no public repos" : "GitHub returned only archived repos");
+		return;
+	}
+
+	// A rename changes the slug but not GitHub's stable numeric id. Upsert by id
+	// so the row follows a rename instead of creating a duplicate. If the new
+	// slug is already owned by another row, skip that one repo rather than
+	// aborting the whole batch (the conflict remains visible in sync_log).
+	const existing = await db.select({ id: repos.id, slug: repos.slug }).from(repos);
+	const ownerBySlug = new Map(existing.map((row) => [row.slug, row.id]));
+	const conflicts = active.filter((repo) => {
+		const owner = ownerBySlug.get(repo.full_name);
+		return owner !== undefined && owner !== repo.id;
+	});
+	const safeRepos = active.filter((repo) => !conflicts.includes(repo));
+	if (conflicts.length > 0) {
+		console.warn(`[github-sync] skipped ${conflicts.length} renamed repo slug conflict(s)`);
+	}
+	if (safeRepos.length === 0) {
+		await log("error", 0, `Skipped ${conflicts.length} repo(s): renamed slug already exists`);
 		return;
 	}
 
@@ -121,7 +144,7 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 		await db
 			.insert(repos)
 			.values(
-				fetched.map((repo) => ({
+				safeRepos.map((repo) => ({
 					id: repo.id,
 					owner: repo.owner?.login ?? username,
 					name: repo.name,
@@ -143,7 +166,7 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 				})),
 			)
 			.onConflictDoUpdate({
-				target: repos.slug,
+				target: repos.id,
 				set: {
 					// Only GitHub-owned columns. Curation columns are excluded so
 					// that featuring, hiding, reordering, or overriding a
@@ -166,12 +189,13 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		console.error("[github-sync] upsert failed:", message);
-		await log("error", fetched.length, message.slice(0, 500));
+		await log("error", safeRepos.length, message.slice(0, 500));
 		return;
 	}
 
-	await log("ok", fetched.length, `Synced ${fetched.length} repos for ${username}`);
-	console.log(`[github-sync] synced ${fetched.length} repos in ${Date.now() - startedAt}ms`);
+	const suffix = conflicts.length > 0 ? `; skipped ${conflicts.length} slug conflict(s)` : "";
+	await log("ok", safeRepos.length, `Synced ${safeRepos.length} repos for ${username}${suffix}`);
+	console.log(`[github-sync] synced ${safeRepos.length} repos in ${Date.now() - startedAt}ms`);
 }
 
 /**

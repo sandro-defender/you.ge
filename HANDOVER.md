@@ -165,6 +165,16 @@ Requirements, verbatim from the user:
 - Safety tooling: `scripts/jsonc.mjs` (string-aware wrangler.jsonc parser —
   do not revert to regex `//` stripping, it ate `*/` cron + `/api/*`);
   `npm run d1:safety` exits 1 on placeholder id, zero remote calls.
+- **R3 local-only completed (2026-09-22):** GitHub sync now filters archived
+  repos, upserts by stable GitHub id so renamed repos follow their row, and
+  skips/logs renamed-slug conflicts instead of aborting the whole batch. It
+  already omitted all curation columns from the update set; this was reviewed
+  against the generated SQL path. Missing `GITHUB_TOKEN` remains a clean,
+  logged unauthenticated attempt/error (60/hour behavior is surfaced from
+  rate-limit headers), never a cron throw. Local migration was applied and
+  `EXPLAIN QUERY PLAN` confirmed `SEARCH repos USING INDEX
+  repos_visible_sort_idx`; remote tail/dashboard verification remains owner-run
+  and intentionally skipped under the no-Cloudflare-interaction rule.
 
 ### ❌ Not done (→ §6 ROADMAP)
 
