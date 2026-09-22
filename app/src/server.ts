@@ -38,14 +38,26 @@ import { createAuth } from "./lib/auth";
 import { createDb } from "./lib/db";
 import { syncGithubRepos } from "./server/github-sync";
 import { INTERNAL_SESSION_HEADER as SESSION_HEADER } from "./lib/internal-header";
+import { ADMIN_ROLES, PROJECT_ROLES, hasRole } from "./lib/roles";
 import type { Env } from "./lib/env";
 
 const app = createApp();
 
-/** Which paths require what. Longest prefix wins. */
-const ACCESS_POLICY: ReadonlyArray<{ prefix: string; requires: "session" | "admin" }> = [
+/**
+ * Which paths require what. Longest prefix wins.
+ *
+ * ACCESS LEVELS (the explicit-grant access model — see src/lib/roles.ts):
+ *   "member" — valid, unbanned session AND role ∈ {admin, member}.
+ *              Google sign-in alone yields role "user", which is NOT enough:
+ *              an admin must grant `member` from /admin/users first.
+ *   "admin"  — valid, unbanned session AND role ∈ {admin}.
+ */
+const ACCESS_POLICY: ReadonlyArray<{
+	prefix: string;
+	requires: "member" | "admin";
+}> = [
 	{ prefix: "/admin", requires: "admin" },
-	{ prefix: "/projects", requires: "session" },
+	{ prefix: "/projects", requires: "member" },
 ];
 
 export default {
@@ -91,7 +103,16 @@ export default {
 				);
 			}
 
-			if (rule.requires === "admin" && session.user.role !== "admin") {
+			// Explicit grant: signing in is not enough for /projects — an admin
+			// must have set role to "member" (or "admin") from /admin/users.
+			if (rule.requires === "member" && !hasRole(session.user.role, PROJECT_ROLES)) {
+				return plainText(
+					403,
+					"Your account has not been granted access yet. An administrator must approve it from the admin panel.",
+				);
+			}
+
+			if (rule.requires === "admin" && !hasRole(session.user.role, ADMIN_ROLES)) {
 				return plainText(403, "Administrator access required.");
 			}
 

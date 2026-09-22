@@ -118,15 +118,23 @@ scheduled() ──▶ GitHub API → D1 (free; cron every 6h, wrangler.jsonc)
   free. Never add a session `refetchInterval`; all lookups are indexed.
   Full table in HANDOVER §10.
 
-### Access model (current state — decision pending)
+### Access model (implemented: explicit role grant)
 
-`ACCESS_POLICY` in `src/server.ts` currently makes `/projects` require **any
-valid session** — i.e. anyone who signs in with Google can see the projects.
-The intended model is an **explicit admin grant**. Two candidates (role check
-vs. an `access_granted` column) are awaiting the owner's decision; see
-HANDOVER §6.4. Admin routes already require `session.user.role === "admin"`,
-and better-auth's admin plugin powers `/admin/users` (list users, set role,
-ban/unban, revoke sessions).
+Chosen by the owner: **role check**, not an `access_granted` column.
+Three roles live in `src/lib/roles.ts` / `src/lib/auth-roles.ts`:
+
+| Role | Granted by | Can reach |
+|---|---|---|
+| `user` | Google sign-in (default) | nothing gated |
+| `member` | admin sets it in `/admin/users` | `/projects`, `/api/projects` |
+| `admin` | `npm run auth:create-admin` | everything member can + `/admin*` |
+
+Enforced in **two places that must agree**: `ACCESS_POLICY` in `src/server.ts`
+(pages) and `requireMember`/`requireAdmin` in `src/server/guard.ts` (API).
+The same `siteRoles` map is passed to `admin({ roles })` (server — validates
+setRole submissions, drives `hasPermission`) and `adminClient({ roles })`
+(client — widens `setRole` types to include `member`). Verify with
+`scripts/role-matrix-smoke.sh` (20 checks: no-session, user, member, admin).
 
 ---
 
