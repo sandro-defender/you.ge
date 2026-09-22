@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Copy to `.dev.vars` for LOCAL development:   cp .dev.vars.example .dev.vars
+#
+# `.dev.vars` is git-ignored. NEVER commit real secrets.
+# For production, set each secret with:  npx wrangler secret put <NAME>
+#
+# `vars` in wrangler.jsonc (non-secret) vs `.dev.vars`/secrets (secret):
+#   wrangler.jsonc vars  → public, visible in the dashboard, fine for usernames
+#   secrets              → encrypted, only readable by the Worker at runtime
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Signs better-auth session cookies. Minimum 32 characters. Generate one with:
+#   node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"
+BETTER_AUTH_SECRET=
+
+# Must be the public URL of the deployed Worker, no trailing slash.
+# Locally, use the vite dev server origin.
+BETTER_AUTH_URL=http://localhost:3000
+
+# ── Google OAuth ─────────────────────────────────────────────────────────────
+# Create credentials at https://console.cloud.google.com/apis/credentials
+#   → Create Credentials → OAuth client ID → Web application
+#   → Authorized JavaScript origins:
+#         http://localhost:3000
+#         https://you.ge
+#   → Authorized redirect URI (exactly this path — a mismatch fails every
+#     sign-in and the fix lives in a console this repo cannot see):
+#         http://localhost:3000/api/auth/callback/google
+#         https://you.ge/api/auth/callback/google
+#
+# The Client ID is public by design (it appears in every OAuth redirect), so it
+# can also live in wrangler.jsonc "vars". The secret must live here.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# ── GitHub repo sync ─────────────────────────────────────────────────────────
+# Used ONLY by the scheduled cron trigger, never by a page request.
+#
+# A fine-grained PAT with "Public repositories" read-only access is enough and
+# raises the rate limit from 60 requests/hour (unauthenticated) to 5,000/hour.
+# Create at https://github.com/settings/personal-access-tokens
+#
+# If left empty, the sync skips GitHub and serves whatever is already in D1 —
+# the site keeps working, it just stops refreshing repo metadata.
+GITHUB_TOKEN=

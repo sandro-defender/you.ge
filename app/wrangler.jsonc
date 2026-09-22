@@ -1,0 +1,97 @@
+{
+	// ─────────────────────────────────────────────────────────────
+	// you.ge — Workers Free configuration
+	//
+	// BEFORE FIRST DEPLOY:
+	//   1. npx wrangler d1 create you-ge
+	//   2. Paste the printed database_id over "REPLACE_WITH_D1_DATABASE_ID"
+	//   3. npx wrangler secret put BETTER_AUTH_SECRET
+	//   4. npx wrangler secret put GOOGLE_CLIENT_SECRET
+	//   5. npx wrangler secret put GITHUB_TOKEN
+	// ─────────────────────────────────────────────────────────────
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "you-ge",
+	"compatibility_date": "2026-09-22",
+
+	// better-auth and drizzle-orm both reach for node:crypto / node:buffer.
+	"compatibility_flags": ["nodejs_compat"],
+
+	// ── Entry ───────────────────────────────────────────────────────────────
+	// `main` MUST point at the SOURCE entry, not at build output.
+	//
+	// Setting this to "dist/server/index.js" makes `vite dev` serve that stale
+	// artifact directly instead of compiling src/ — so code changes silently do
+	// nothing and the running app can disagree with the source you are reading.
+	// (Caught in exactly that way: a fixed hook kept throwing its old error.)
+	//
+	// The Cloudflare Vite plugin builds src/server.ts itself and writes the
+	// deployable result to dist/server/index.js, along with a generated
+	// dist/server/wrangler.json whose "main" is already correct for deploy.
+	//
+	// src/server.ts is OUR entry rather than TanStack Start's default
+	// "@tanstack/react-start/server-entry", and that is load-bearing: it wraps
+	// Start's handler so (a) /api/* reaches Hono and (b) gated paths are
+	// permission-checked BEFORE React renders — the only place in the stack that
+	// has both the request and the D1 binding.
+	"main": "src/server.ts",
+
+	// ⚠️ There is deliberately NO top-level "assets" block.
+	// This is a fully server-rendered app: every HTML document comes out of the
+	// Worker so that the permission checks in src/server.ts always run. Only
+	// hashed JS/CSS/images are static, and the plugin wires those up itself in
+	// the generated dist/server/wrangler.json (assets.directory = ../client).
+	//
+	// If you ever add an "assets" block here AND prerender a gated route, the
+	// prerendered file is served WITHOUT invoking the Worker — publishing gated
+	// content to everyone and silently bypassing every check. Never prerender
+	// /admin or /projects.
+
+	"observability": {
+		"enabled": true
+	},
+
+	// ── Database ──────────────────────────────────────────────────
+	// ⚠️  THIS MUST BE A DATABASE YOU CREATE NEW FOR THIS PROJECT.
+	//     Do NOT paste the id of any D1 database you already use.
+	//
+	//     `npm run db:migrate:remote` runs scripts/d1-safety-check.mjs first,
+	//     which REFUSES to proceed unless database_name is exactly
+	//     "you-ge-portfolio" AND the target contains no user tables.
+	//     Run `npm run d1:list` to see every database already in your account.
+	//
+	// The name is deliberately unusual so it cannot collide with an existing
+	// database. If you must change it, change EXPECTED_DB_NAME in BOTH
+	// scripts/d1-safety-check.mjs and scripts/d1-setup.mjs at the same time.
+	//
+	// Workers Free: 5 GB storage, 5M rows read/day, 100k rows written/day.
+	// Since 2026-09-01 exceeding either daily cap HARD FAILS every query
+	// until 00:00 UTC. "rows read" means rows SCANNED, so indexes matter.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "you-ge-portfolio",
+			"database_id": "REPLACE_WITH_D1_DATABASE_ID",
+			// Point wrangler at the folder drizzle-kit writes to. Without this it
+			// defaults to ./migrations, finds nothing, and silently reports "no
+			// migrations to apply" — which looks like success while leaving the
+			// database empty and every query failing with "no such table".
+			"migrations_dir": "drizzle"
+		}
+	],
+
+	// ── GitHub repo sync ──────────────────────────────────────────
+	// GitHub allows only 60 unauthenticated requests/hour/IP and 5,000/hour
+	// for a PAT. Fetching repos per page view would break the site within an
+	// hour of real traffic, so we sync on a schedule into D1 instead and the
+	// pages read only D1. Scheduled invocations are FREE and do not count
+	// toward the 100k requests/day allowance. Cron triggers are Workers-only
+	// — Cloudflare Pages cannot do this at all.
+	"triggers": {
+		"crons": ["0 */6 * * *"]
+	},
+
+	"vars": {
+		"GITHUB_USERNAME": "sandro-defender",
+		"APP_URL": "https://you.ge"
+	}
+}
