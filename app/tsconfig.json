@@ -1,0 +1,34 @@
+{
+	"compilerOptions": {
+		"target": "ES2022",
+		"lib": ["ES2023", "DOM", "DOM.Iterable"],
+		"module": "ESNext",
+		"moduleResolution": "bundler",
+		// Runtime types come from the GENERATED worker-configuration.d.ts, which
+		// `wrangler types` produces from wrangler.jsonc. Wrangler itself now says
+		// @cloudflare/workers-types is superseded by it, and listing both produces
+		// duplicate global declarations — so workers-types is deliberately absent.
+		// @types/node is required because nodejs_compat is enabled.
+		"types": ["node", "vite/client"],
+
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"esModuleInterop": true,
+		"resolveJsonModule": true,
+		"isolatedModules": true,
+		"verbatimModuleSyntax": true,
+		"allowImportingTsExtensions": true,
+
+		"jsx": "react-jsx",
+		"jsxImportSource": "react",
+
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["src/**/*.ts", "src/**/*.tsx", "*.ts", "worker-configuration.d.ts"],
+	"exclude": ["node_modules", ".output", "dist"]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "you-ge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Gated portfolio for you.ge \u2014 TanStack Start + Hono + better-auth + D1 on Cloudflare Workers Free",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "vite build && wrangler deploy -c dist/server/wrangler.json",
+    "cf-typegen": "wrangler types",
+    "d1:setup": "node scripts/d1-setup.mjs",
+    "d1:list": "wrangler d1 list",
+    "d1:safety": "node scripts/d1-safety-check.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply you-ge-portfolio --local",
+    "db:migrate:remote": "node scripts/d1-safety-check.mjs && wrangler d1 migrations apply you-ge-portfolio --remote",
+    "db:studio": "drizzle-kit studio",
+    "auth:generate-schema": "auth generate --config ./src/lib/auth.ts --adapter drizzle --dialect sqlite --output ./src/db/schema-auth.ts",
+    "auth:create-admin": "auth create-admin --config ./src/lib/auth.ts",
+    "auth:info": "auth info --config ./src/lib/auth.ts",
+    "typecheck": "tsc --noEmit",
+    "deploy:dry": "vite build && wrangler deploy -c dist/server/wrangler.json --dry-run"
+  },
+  "dependencies": {
+    "@tanstack/react-router": "^1.170.38",
+    "@tanstack/react-start": "^1.168.57",
+    "better-auth": "^1.7.5",
+    "drizzle-orm": "^0.45.3",
+    "hono": "^4.13.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.57.1",
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "auth": "^1.7.5",
+    "drizzle-kit": "^0.31.11",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.0",
+    "wrangler": "^4.136.1"
+  }
+}
