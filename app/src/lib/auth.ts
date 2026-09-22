@@ -2,6 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { admin } from "better-auth/plugins";
 import { createDb } from "./db";
+import { siteRoles } from "./auth-roles";
 import type { Env } from "./env";
 
 /**
@@ -97,6 +98,15 @@ export function createAuth(env: Env) {
 			 * rather than hand-editing rows.
 			 */
 			admin({
+				// siteRoles = { admin, member, user } (src/lib/auth-roles.ts), the
+				// SAME map the browser passes to adminClient(). Passing it here:
+				//   • validates setRole submissions (no unknown role strings reach
+				//     user.role),
+				//   • drives hasPermission() — `member` carries no admin permissions.
+				// Without it the server would still accept any string, but the client
+				// types would stay pinned to "user" | "admin" and granting `member`
+				// would not typecheck.
+				roles: siteRoles,
 				defaultRole: "user",
 				adminRoles: ["admin"],
 				defaultBanReason: "Access revoked by an administrator.",
@@ -128,6 +138,10 @@ export function createAuth(env: Env) {
 	});
 }
 
-/** Roles this app understands. Extend here and in the DB check constraint. */
-export const ROLES = ["admin", "user"] as const;
-export type Role = (typeof ROLES)[number];
+// Roles live in src/lib/roles.ts (dependency-free leaf shared by the Worker
+// entry, the Hono guards and client components). Re-exported here because
+// this module's docs have always pointed at it; re-export keeps existing
+// importers working. The `user.role` column is plain `text` — there is no DB
+// CHECK constraint to extend (verified in drizzle/0000_*.sql).
+export { ROLES } from "./roles";
+export type { Role } from "./roles";

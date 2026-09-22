@@ -6,33 +6,44 @@ contradict popular tutorials; each one says why and how it was verified.
 
 ---
 
-## 0. Prompt for the next agent
+## 0. Note for the next agent (read before touching anything)
 
-> You are continuing work in `/home/user/you.ge` on branch `arena/01a0c71b-you-ge`.
-> Read `app/HANDOVER.md` completely before changing anything — it lists verified
-> API facts that contradict common tutorials, and one bug that is mid-fix.
+> **Branch discipline:** work on whatever `git branch --show-current` says
+> (session-bound, e.g. `arena/01a0c776-you-ge`); push only to that branch.
+> The user's original prompt named `01a0c71b` — that was PR #1, already
+> merged; do not resurrect it.
 >
-> The goal: a modern gated portfolio for you.ge on **Cloudflare Workers Free +
-> D1 only**, showing the owner's GitHub projects, with Google OAuth sign-in,
-> per-user permissions, and an admin panel to grant access.
+> **Goal:** a modern gated portfolio for you.ge on **Cloudflare Workers Free +
+> D1 only**: GitHub projects with descriptions, Google OAuth sign-in, per-user
+> view permissions, admin panel granting access. Stack (settled, do not
+> re-litigate): TanStack Start (React SSR) + Hono + better-auth 1.7.5 +
+> Drizzle + D1, one Worker. Reasoning is in §2.
 >
-> Stack (already scaffolded in `app/`, building and typechecking clean):
-> TanStack Start (React SSR) + Hono (API) + better-auth (Google OAuth, RBAC,
-> admin plugin) + Drizzle ORM + D1, deployed as one Worker.
->
-> **Hard constraints:**
+> **Hard constraints (all standing):**
 > 1. Never touch, create, migrate, or read any D1 database in the user's
->    Cloudflare account. Local Miniflare SQLite (`--local`) is fine and is the
->    only database that currently exists. `scripts/d1-safety-check.mjs` enforces
->    this — do not weaken it, and do not run anything with `--remote`.
-> 2. Do not modify anything outside `app/`. The casino/games files at the repo
->    root are the user's previous example site and must stay untouched.
-> 3. Verify APIs against the *installed packages* (node_modules, or by probing at
->    runtime), not against docs or memory. better-auth is at 1.7.5 and its API
->    has moved significantly from the 1.4.x era most tutorials describe.
+>    Cloudflare account. Local Miniflare SQLite (`--local`) only, never
+>    `--remote`. `scripts/d1-safety-check.mjs` must not be weakened.
+> 2. Modify nothing outside `app/`. The casino/games files at the repo root
+>    stay untouched.
+> 3. Verify APIs against the *installed packages* (node_modules, or by probing
+>    at runtime), not docs/memory. better-auth 1.7.5 differs greatly from the
+>    1.4.x era most tutorials describe — see §7 for traps already paid for.
+> 4. The access model was **asked about and decided by the user**: a role
+>    check, gate on a **`member`** role. It is implemented and E2E-verified —
+>    do not redesign it (details in §3, architecture notes in §4b).
 >
-> Immediate job: finish section 3 ("Where it stands"), then section 6 ("Next
-> steps"). Re-run the smoke tests in section 5 after any change.
+> **What is done:** everything under §3 "✅ Done and verified", including the
+> role gate, the `/api/auth` path-prefix bugfix, `README.md`, and a 20/20
+> green `scripts/role-matrix-smoke.sh`. A local dev server runs with a seeded
+> 3-user fixture (`user`/`member`/`admin`).
+>
+> **What is NOT done:** production deploy, Google OAuth credentials, a real
+> admin user, GitHub sync proven against a remote DB. The step-by-step
+> **ROADMAP in §6** is ordered — start at R1 only when the previous step's
+> acceptance criteria are met. Each Ri is sized to ~60% of one agent context
+> window: do it, verify, commit, stop; leave the rest to the next agent.
+>
+> After any change: re-run §5 (tsc, build, leak check, smoke, role matrix).
 
 ---
 
@@ -83,45 +94,47 @@ Requirements, verbatim from the user:
 ### ✅ Done and verified
 
 - All config, schema, server code, routes and components written.
-- `npx tsc --noEmit` → **0 errors**.
-- `npx vite build` → **succeeds**, outputs `dist/server/index.js` + `dist/client/`.
-- Local D1 migration applied: 7 tables, 7 indexes (`repos_visible_sort_idx`, `repos_slug_idx`, `session_userId_idx`, …).
-- **Security smoke tests passed** (see §5).
-- Client bundle is 429 kB; no drizzle, no SQL, no GitHub URL, no D1 types in it.
+- `npx tsc --noEmit` → **0 errors**; `npx vite build` → **succeeds**
+  (`dist/server/index.js` + `dist/client/`); client-bundle leak check
+  **ALL_CLEAN** (§5 list).
+- Local D1 migration applied (7 tables, 7 indexes). Stale-`dist` bug fixed
+  long ago: `wrangler.jsonc` `main = "src/server.ts"`, never build output.
+- **`README.md`** written — deploy runbook, architecture, env vars, safety.
+- **Access model implemented** (user decision: role check / `member` role):
+  - `src/lib/roles.ts` — leaf module: `ROLES`, `hasRole()` (fail-closed,
+    comma-split), `PROJECT_ROLES`, `ADMIN_ROLES`.
+  - `src/lib/auth-roles.ts` — `siteRoles` + `memberAc`, shared by server and
+    client. **Do not pass `ac` to `admin()`** — TS2322 variance; runtime never
+    reads it (uses `roles` only). See §4b.
+  - `server.ts` `ACCESS_POLICY`: `/admin` requires `admin`, `/projects`
+    requires `member`. Member gate 403: *"Your account has not been granted
+    access yet…"* (identical page + API body).
+  - `guard.ts`: `requireMember` (401 no session → 403 wrong role);
+    `app.ts` mounts `requireSession, requireMember` on `/projects/*`.
+  - `auth.ts` / `auth-client.ts`: both pass `roles: siteRoles` to `admin()` /
+    `adminClient()` so `setRole` validates/widens to `user|member|admin`.
+  - `routes/admin/users.tsx`: role select with plain-language labels +
+    rewritten "How access works" copy.
+- **`/api/auth/*` path-prefix bug FIXED** — Worker strips `/api` before Hono;
+  `auth-routes.ts` now rebuilds the Request with `/api` restored before
+  `auth.handler`. Previously **every HTTP auth endpoint 404'd** while
+  `auth.api.getSession` kept working (invisible to §5 smoke). Verified:
+  `/api/auth/get-session` → 200, `/api/auth/ok` → 200. **Never hand the
+  stripped path to `auth.handler` again** — old comment in that file lied.
+- **Role matrix E2E: 20/20 PASS** via `scripts/role-matrix-smoke.sh`
+  (no-session/user/member/admin × page+API, forged-header probe).
+- Local fixtures: `scripts/seed-local-test-users.mjs` (deterministic tokens,
+  DELETE-then-INSERT, `--cookies` md5-stable) + 3 sessions in local D1.
+- Safety tooling: `scripts/jsonc.mjs` (string-aware wrangler.jsonc parser —
+  do not revert to regex `//` stripping, it ate `*/` cron + `/api/*`);
+  `npm run d1:safety` exits 1 on placeholder id, zero remote calls.
 
-### ⚠️ IN PROGRESS — the one thing to finish first
+### ❌ Not done (→ §6 ROADMAP)
 
-`vite dev` was serving a **stale `dist/server/index.js`** instead of compiling
-`src/`, so a bug I had already fixed kept throwing:
-
-```
-TypeError: useSession is not a function
-    at Nav (dist/server/assets/router-w5-cfLmR-B-48jkM2.js:1588:39)
-```
-
-Root cause: I had set `wrangler.jsonc` `"main": "dist/server/index.js"`.
-**Already fixed** — `main` is now `"src/server.ts"` and the top-level `assets`
-block was removed. `dist/` was deleted.
-
-**Not yet re-verified.** Do this first:
-
-```bash
-cd app
-npx vite dev            # or: npm run dev  (background it)
-# then re-run every test in §5
-```
-
-Expected: `/` and `/login` return **HTTP 200 with real server-rendered HTML**
-(previously `/` returned 500 because of the stale bundle).
-
-### ❌ Not done
-
-- `app/README.md` does not exist.
-- Never deployed. `database_id` is still the placeholder.
-- No Google OAuth credentials configured.
-- No admin user created.
-- `worker-configuration.d.ts` should be regenerated (`npx wrangler types`) since
-  `wrangler.jsonc` changed after the last generation.
+- Never deployed; `database_id` still placeholder; no Google OAuth creds;
+  no real admin user.
+- `?next=` post-login redirect untested end-to-end (needs real Google).
+- Error-boundary route, SEO/OG tags: not started.
 
 ---
 
@@ -184,87 +197,281 @@ normal same-origin browser request.
 
 ---
 
-## 5. Verification already performed — re-run after changes
+### 4b. Access-model implementation notes (paid research, do not undo)
+
+Runtime facts verified against installed better-auth 1.7.5 source:
+
+1. **`admin({ roles })` + `adminClient({ roles })`, never `ac`.** The server
+   computes permissions via `options.roles || defaultRoles`; a custom `ac` is
+   only consulted for `hasPermission` typing and caused TS2322 (specific
+   statements vs generic `AccessControl` variance) when passed. `setRole`
+   validates against `roles` → unknown role = `BAD_REQUEST INVALID_ROLE_TYPE`.
+2. **`setRole` REPLACES the `role` column** (comma-joins input; revoke =
+   set `"user"`). `"admin,member"` is valid. All checks `split(",")` via
+   `hasRole` in `roles.ts`, which returns **false** on empty/null (fail closed).
+3. **`memberAc = defaultAc.newRole({ user: [], session: [] })`** — members get
+   zero admin-plugin capabilities; `hasPermission` 403s every
+   `/api/auth/admin/*`. The grant's *effect* is only the role string read by
+   `ACCESS_POLICY` / `requireMember`.
+4. **Cookie cache 5 min** — a role change is invisible for up to 5 min on
+   cookies that carry `session_data`. Cookies without `session_data` go to D1
+   and see the new role immediately.
+5. **Internal `x-youge-session` header** still carries `role` after the Worker
+   gate; page 403 for member-on-/admin happens at `ACCESS_POLICY` before
+   render. Forged values are stripped first (§4, §5).
+6. **Local cookie format** (for fixtures): `better-auth.session_token` (no
+   `__Secure-` prefix — `BETTER_AUTH_URL=http://localhost:3000` is not
+   https), value = `token + "." + base64url(HMAC-SHA256(secret, token))`.
+   `hono/dist/utils/cookie.js` is **not importable** (exports map); verify
+   signatures with WebCrypto or the seed script's own signer.
+
+## 5. Verification — re-run after every change
 
 ```bash
 cd app
-npx tsc --noEmit                                    # expect: 0 errors
-npx vite build                                      # expect: success
-npm run d1:safety                                   # expect: exit 1, BLOCKED
-npx wrangler d1 migrations apply you-ge-portfolio --local
-npx vite dev &
-```
-
-Security smoke tests (all passed at the time of writing):
-
-| Request (no cookie) | Expected | Got |
-|---|---|---|
-| `GET /api/health` | 200 | **200** ✔ |
-| `GET /projects` | 302 → `/login?next=%2Fprojects` | **302** ✔ |
-| `GET /projects/foo` | 302, next preserved | **302** ✔ |
-| `GET /admin` | 302 | **302** ✔ |
-| `GET /admin/users` | 302 | **302** ✔ |
-| `GET /api/projects` | 401 | **401** ✔ |
-| `GET /api/admin/repos` | 401 | **401** ✔ |
-| `GET /projects` **with forged `x-youge-session: {"role":"admin",…}`** | 302, not 200 | **302** ✔ |
-
-Still to re-verify after the `main` fix:
-
-```bash
-curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/          # want 200 (was 500)
-curl -s http://127.0.0.1:3000/login | grep -o 'Continue with Google'      # want a match
-```
-
-Client-bundle leak check (must all say `clean`):
-
-```bash
-npx vite build
+npx tsc --noEmit                 # expect: 0 errors
+rm -rf dist && npx vite build    # expect: success (rm first: empty-dist = false-clean leak check)
+npm run d1:safety                # expect: exit 1, BLOCKED on placeholder id
+# leak check — every line must say clean:
 for n in drizzle api.github.com BETTER_AUTH_SECRET sqlite_master D1Database; do
-  printf '%-22s ' "$n"; grep -rqi "$n" dist/client/ && echo '⚠ FOUND' || echo clean
+  printf '%-22s ' "$n"; grep -rqi "$n" dist/client/ && echo FOUND || echo clean
 done
+# dev server (loads .dev.vars automatically), then:
+npx vite dev &
+bash scripts/role-matrix-smoke.sh          # expect: pass=20 fail=0
+node scripts/seed-local-test-users.mjs --cookies   # only if fixtures missing
 ```
 
-> Note: `better-auth` *will* appear in `dist/client/` — that is legitimate, it's
-> the `better-auth/client` package. What must NOT appear is server config
-> plumbing. An earlier version leaked better-auth's `env` accessor
-> (`get BETTER_AUTH_SECRET(){…}`) because `auth-client.ts` inferred a type via
-> `typeof import("./auth")`. Fixed; keep it that way.
+> `better-auth` WILL appear in `dist/client/` — that's the legitimate client
+> package. What must never appear is server plumbing (the `get
+> BETTER_AUTH_SECRET` accessor leaked once via `typeof import("./auth")` —
+> fixed; keep `auth-client.ts` importing only `auth-roles.ts`, never `auth.ts`).
+
+Auth-endpoint probes (regression guard for the `/api`-strip bug, §3):
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/auth/get-session   # 200 (body: null)
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/api/auth/ok            # 200
+```
+
+If these 404: someone reverted the `/api` re-prefix in
+`src/server/auth-routes.ts`. **Every sign-in/OAuth/admin HTTP call is dead**
+when that happens, while `auth.api.getSession` keeps working — do not be
+fooled.
+
+Baseline smoke (no cookies) — all green as of last run:
+
+| Request | Expected |
+|---|---|
+| `GET /` | 200 + doctype + title + stylesheet |
+| `GET /login` | 200 + "Continue with Google" |
+| `GET /api/health` | 200 |
+| `GET /projects`, `/projects/foo`, `/admin`, `/admin/users` | 302 → `login?next=…` |
+| `GET /api/projects`, `/api/admin/repos` | 401 |
+| any of the above **+ forged `x-youge-session`** | still 302/401 |
+
+Role matrix (`scripts/role-matrix-smoke.sh`, 20 checks, last run **20/20**):
+
+| Role | `/projects` | `/api/projects` | `/admin` | `/api/admin/repos` | get-session |
+|---|---|---|---|---|---|
+| no session | 302 | 401 | 302 | 401 | 200 `null` |
+| `user` | **403** | **403** | 403 | 403 | 200 role=user |
+| `member` | **200** | **200** | 403 | 403 | 200 role=member |
+| `admin` | 200 | 200 | 200 | 200 | 200 role=admin |
+
+Fixture credentials (local D1 only, re-seed with the script above):
+`plainuser@test.local` / `memberuser@test.local` / `adminuser@test.local`,
+ids `test-user-0001` / `test-member-0001` / `test-admin-0001`, tokens
+`testtoken-<role>-<sha256(id)[0:24]>`, expiry +7 days.
 
 ---
 
-## 6. Next steps, in order
+## 6. ROADMAP — step-by-step, one ~60% context budget per step
 
-1. **Restart dev and re-run §5.** Confirm `/` is 200 with real HTML.
-2. **Regenerate types**: `npx wrangler types` (wrangler.jsonc changed).
-3. **Write `app/README.md`** — see §7 for everything it must contain.
-4. **Decide the access model** (currently a deliberate placeholder):
-   `ACCESS_POLICY` in `src/server.ts` makes `/projects` require only a *session*,
-   so **anyone who signs in with Google can view projects**. The user asked for
-   "permissions to view page" + "admin grants access", which implies an explicit
-   grant. To implement: add a role check (e.g. `requires: "member"`) or an
-   `access_granted` column, and seed the first admin with
-   `npm run auth:create-admin`. **Ask the user which they want.**
-5. **First real deploy** (user must do this — needs their Cloudflare account):
-   ```bash
-   npm run d1:setup                                   # read-only: lists existing DBs
-   npx wrangler d1 create you-ge-portfolio            # NEW database
-   # paste the uuid into wrangler.jsonc database_id
-   npm run d1:safety                                  # must pass now
-   npm run db:migrate:remote
-   npx wrangler secret put BETTER_AUTH_SECRET
-   npx wrangler secret put GOOGLE_CLIENT_SECRET
-   npx wrangler secret put GITHUB_TOKEN
-   npm run auth:create-admin
-   npm run deploy
-   ```
-6. **Google Cloud Console**: OAuth client → Web application. Authorized redirect
-   URIs must be **exactly**:
-   `http://localhost:3000/api/auth/callback/google` and
-   `https://you.ge/api/auth/callback/google`. A mismatch fails *every* sign-in
-   and the cause is invisible from the browser.
-7. Nice-to-haves: `?next=` post-login redirect is implemented but untested
-   end-to-end (needs real Google creds); error boundary route; SEO/OG tags if the
-   site ever becomes public.
+Each step **R1, R2, …** is sized so a fresh agent can complete it while using
+roughly **60% of one context window**: read the listed files, do the work,
+verify, commit, and stop with ~40% left for review/discussion. Do **not**
+bundle two steps into one session — leftovers from a blown budget are how
+mistakes ship. Ordering is strict unless a step says otherwise.
+
+**Every step ends with the same exit ritual:**
+`npx tsc --noEmit` → `rm -rf dist && npx vite build` → leak check + `d1:safety`
+(§5) → commit to the session branch with a message naming the R-step → push →
+update §3 "Where it stands" (one paragraph: what R-step finished, what broke,
+what surprised you) → stop.
+
+---
+
+### R1 — First production deploy (no OAuth yet)  ·  est. ~60% of budget
+
+*Touches:* `wrangler.jsonc`, Cloudflare dashboard, `.dev.vars`→secrets.
+*Read first:* §8 (safety), README "Deploy runbook", §0 constraints.
+
+1. Confirm with the user before ANY account command (constraint #1 stands).
+2. `npm run d1:setup` (read-only listing) → user runs
+   `npx wrangler d1 create you-ge-portfolio` → paste uuid into
+   `wrangler.jsonc` `database_id`.
+3. `npm run d1:safety` must now **pass** (it only ever passed-exit-0 with a
+   real id + empty DB) → `npm run db:migrate:remote` (still chains the guard).
+4. `npx wrangler secret put BETTER_AUTH_SECRET` (openssl rand -base64 32),
+   `GOOGLE_CLIENT_SECRET`, `GITHUB_TOKEN` (fine-grained, read-only repo).
+5. `npm run auth:create-admin` → the owner's Google email gets `role=admin`
+   **on the remote D1** (requires their Google sign-in to have happened — if
+   not yet, create the row after R2 and re-run).
+6. `npm run deploy` → hit `https://you.ge/api/health` and
+   `/api/auth/get-session` (must be 200, not 404).
+
+*Acceptance:* site up, health 200, auth endpoints 200 (404 here = the §3
+prefix bug regressed), migration table present on remote, local tests still
+20/20. *Likely time sink:* wrangler auth / account-id confusion — ask the
+user rather than improvising credentials.
+
+---
+
+### R2 — Google OAuth end-to-end  ·  ~60%
+
+*Touches:* Google Cloud Console (user-driven), `.dev.vars.example` docs,
+possibly `auth.ts` config if callback shape surprises.
+*Read first:* §5 auth probes, README "Google redirect URIs".
+
+1. User creates an OAuth client (Web) + enables Google Identity; consents
+   screen with test users = owner's email while in testing mode.
+2. Redirect URIs **exactly**: `http://localhost:3000/api/auth/callback/google`
+   and `https://you.ge/api/auth/callback/google`.
+3. Local first: `npx vite dev` → `/login` → full Google round-trip → land on
+   `/login?next=…` target → `user` role row created in local D1 → `/projects`
+   shows the **403 grant message** (correct for a fresh account!).
+4. Then on prod. Admin panel → `/admin/users` → set owner to `admin` if the
+   R1 create-admin ran before sign-up existed; set a second test account to
+   `member` → `/projects` 200; revoke back to `user` → 403.
+5. Verify cookieCache lag (~5 min) is acceptable or document it in README.
+
+*Acceptance:* real sign-in on localhost + you.ge; role matrix behaviour
+identical on prod for user/member/admin; ban/unban + revoke-sessions buttons
+work from `/admin/users`. *Likely time sink:* OAuth consent screen still in
+"Testing" → 7-day token refresh — that's fine, document it.
+
+---
+
+### R3 — GitHub sync hardening + first real data  ·  ~60%
+
+*Touches:* `src/server/github-sync.ts`, `admin-router.ts` sync endpoints,
+`schema-app.ts` (only if a column is missing — add a migration then).
+*Read first:* §10 quota table, §9 file map.
+
+1. Trigger `POST /api/admin/sync` as admin; inspect `sync_log` row on
+   failure (the UI shows last-run status).
+2. Verify upsert SQL still excludes curation columns (§10) — flip
+   `featured/hidden/customDescription` on one repo, re-sync, confirm they
+   stick.
+3. Edge cases: repo renamed upstream (slug conflict policy), archived repos,
+   0-token 60/hr rate limit behaviour, `GITHUB_TOKEN` absent → cron must not
+   hard-fail the Worker (log + sync_log, exit clean).
+4. Check `repos_visible_sort_idx` is used (`EXPLAIN QUERY PLAN` in
+   `wrangler d1 execute --local --command`).
+
+*Acceptance:* owner-visible repos render on `/projects` with descriptions,
+curated flags survive sync, cron `*/6h` shows a scheduled entry in
+`wrangler tail` (or dashboard) without errors.
+
+---
+
+### R4 — UX polish pass on gated pages  ·  ~60%
+
+*Touches:* `routes/projects.tsx`, `routes/login.tsx`, `routes/index.tsx`,
+`components/Nav.tsx`, `styles/app.css`, maybe new `components/`.
+*Read first:* current design tokens in `app.css`, README screenshots section.
+
+1. Loading/empty/error states for the `useEffect` fetch (spinner, "no
+   projects yet — sync pending", retry button).
+2. Project card design: description clamp, language/topic chips, featured
+   badge, external-link affordance; mobile pass.
+3. 403 page: keep the exact member-gate copy but make it a designed state,
+   not raw text (role matrix asserts the message body — update the script's
+   expected string if you reword, or keep the string and restyle around it).
+4. `?next=` flow: after Google login land on the originally requested page;
+   open-redirect guard already in `login.tsx` — add a unit-style curl check.
+
+*Acceptance:* role matrix still 20/20 (or updated expectations), leak check
+clean, Lighthouse-ish eyeball on 375px + 1280px.
+
+---
+
+### R5 — Admin UX: users + repos workflows  ·  ~60%
+
+*Touches:* `routes/admin/users.tsx`, `routes/admin/repos.tsx`,
+`routes/admin/index.tsx`, `admin-router.ts` if new endpoints needed.
+
+1. Users table: search/filter by role, show created_at, disable self-demotion
+   of the last admin (better-auth may already block — verify, don't assume).
+2. Bulk grant? Only if cheap (admin plugin has no bulk setRole — a small
+   loop of `authClient.admin.setRole` is fine at 3 users, questionable at
+   300; ask owner about expected user count first).
+3. Repos table: keyboard-accessible reorder (they said drag-and-drop is nice
+   but not required — verify ARIA on whatever exists), description editing
+   with length cap, feature/hide toggles with optimistic UI + rollback.
+4. Sync button: disabled-while-pending, toast on success/failure.
+
+*Acceptance:* full grant→view→revoke cycle without touching SQL; no new
+admin routes bypass `requireAdmin`; tsc/build/matrix green.
+
+---
+
+### R6 — Security review + error handling  ·  ~60%
+
+*Touches:* `server.ts`, `guard.ts`, `app.ts`, new `routes/error.tsx` or
+`__root.tsx` errorComponent, headers config.
+
+1. Re-read §4 forgery guard; add matrix rows for: expired session cookie,
+   banned user (403 + reason), `role` containing garbage (`hasRole` fail-closed
+   — unit-check `roles.ts` with node -e), `/api/auth/admin/*` as member (403).
+2. Error boundary: Start's `errorComponent` — SSR errors currently fall to
+   Worker 500; ship a minimal branded 500 that does not leak stack traces.
+3. Headers: confirm `secureHeaders` on Hono + correct cache-control on
+   `/api/health` (no-store) vs static assets (immutable).
+4. Rate limiting reality-check: Workers Free has none built-in — document
+   "no rate limit on /api/auth" as accepted risk or add a tiny D1 counter
+   only for sign-in failures (owner decision — ask).
+
+*Acceptance:* matrix grows to cover banned/expired (update the script's
+expect table), leak check clean, no stack traces in any 500 body.
+
+---
+
+### R7 — SEO / meta / share cards (site becomes indexable)  ·  ~60%
+
+*Touches:* `__root.tsx` `head()`, route heads, maybe `public/` images.
+
+1. Only do this if the owner wants the landing page public (portfolio SEO).
+   Title/description/OG/Twitter cards per route; canonical `https://you.ge`.
+2. `sitemap` + `robots` via a tiny public route (no third-party deps).
+3. Gated routes: `noindex` meta when 403 renders, never leak titles of
+   private projects into public meta.
+
+*Acceptance:* view-source shows correct OG tags on `/`; `/projects` 403 has
+no project names in `<head>`.
+
+---
+
+### R8 — Owner docs + decommission prep  ·  ~60%
+
+*Touches:* `README.md`, `HANDOVER.md` §3/§6, optional `app/docs/`.
+
+1. Write the "owner runbook": day-2 ops (rotate secret, revoke a user, read
+   sync_log, local dev from a clean clone, deploy checklist).
+2. Archive this ROADMAP: mark R1–R7 done with dates; move remaining nice-to-
+   haves into a backlog list.
+3. Final pass: every §7 fact still true? (Re-probe the two that rot fastest:
+   better-auth version, TanStack Start handler shape.)
+
+*Acceptance:* a cold-start agent can deploy+operate from docs alone; PR
+description summarises the whole arc for the owner.
+
+---
+
+**Out of scope unless the owner asks:** secondaryStorage/KV, Durable Objects,
+multi-tab session sync, CSS frameworks, TanStack Query, i18n, non-Google
+OAuth providers, Workers Paid anything.
 
 ---
 
@@ -364,9 +571,13 @@ app/
 ├── worker-configuration.d.ts      GENERATED (604 kB) — commit it
 ├── .dev.vars.example              documents every secret + Google redirect URIs
 ├── .gitignore                     ignores .dev.vars, dist/, .wrangler/, .output/
+├── README.md                      deploy runbook + architecture (§5, R1–R2)
 ├── scripts/
 │   ├── d1-safety-check.mjs        migration guard (§8)
-│   └── d1-setup.mjs               read-only DB listing (§8)
+│   ├── d1-setup.mjs               read-only DB listing (§8)
+│   ├── jsonc.mjs                  string-aware wrangler.jsonc parser (§3)
+│   ├── seed-local-test-users.mjs  fixtures + --cookies (§5)
+│   └── role-matrix-smoke.sh       20-check E2E gate test (§5)
 ├── drizzle/
 │   └── 0000_volatile_thena.sql    6 tables + indexes
 └── src/
@@ -381,8 +592,10 @@ app/
     ├── lib/
     │   ├── env.ts                 Env = Cloudflare.Env & Secrets
     │   ├── db.ts                  createDb(d1)
-    │   ├── auth.ts                ⭐ createAuth(env) factory — per request
-    │   ├── auth-client.ts         browser client + useAuthSession() (§7.1)
+    │   ├── roles.ts               ⭐ leaf: ROLES/hasRole fail-closed (§4b)
+    │   ├── auth-roles.ts          siteRoles + memberAc, client-safe (§4b)
+    │   ├── auth.ts                ⭐ createAuth(env) — admin({roles:siteRoles})
+    │   ├── auth-client.ts         adminClient({roles}) + useAuthSession (§7.1)
     │   ├── internal-header.ts     leaf module, no deps (§4)
     │   ├── session-fn.ts          createServerFn reading that header
     │   ├── types.ts               PublicProject/AdminRepo/SyncRun (client+server)
@@ -390,8 +603,8 @@ app/
     ├── server/
     │   ├── app.ts                 Hono root: services → secureHeaders → routes
     │   ├── context.ts             createServices(env) — one per request
-    │   ├── auth-routes.ts         sub.all("/*") → auth.handler(raw)
-    │   ├── guard.ts               requireSession, requireAdmin
+    │   ├── auth-routes.ts         ⭐ re-prefixes /api before auth.handler (§3)
+    │   ├── guard.ts               requireSession, requireAdmin, requireMember
     │   ├── repos-router.ts        /projects, /projects/by-slug (indexed reads)
     │   ├── admin-router.ts        /admin/repos, PATCH, /sync, /sync-log
     │   └── github-sync.ts         ⭐ cron sync, single multi-row upsert

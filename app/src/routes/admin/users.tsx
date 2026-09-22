@@ -118,11 +118,14 @@ function AdminUsers() {
 			<div className="notice" style={{ marginBottom: "1rem" }}>
 				<p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
 					<strong>How access works:</strong> anyone can sign in with Google, which
-					creates an account with role <code>user</code>. Only an{" "}
-					<code>admin</code> can open <code>/admin</code>. The{" "}
-					<code>/projects</code> page currently requires a session and an unbanned
-					account — edit <code>ACCESS_POLICY</code> in <code>src/server.ts</code>{" "}
-					to require a specific role instead.
+					creates an account with role <code>user</code> — that grants nothing by
+					itself. Grant <code>member</code> to open <code>/projects</code> and the
+					project API; grant <code>admin</code> to open <code>/admin</code> and
+					manage users. Revoke by setting the role back to <code>user</code> (or
+					ban the account). Role changes reach an open tab within ~5 minutes —
+					session role is served from better-auth&apos;s cookie cache; use
+					&quot;Revoke sessions&quot; to cut sessions off, taking effect at the next
+					cache refresh.
 				</p>
 			</div>
 
@@ -211,7 +214,7 @@ function UserRowView({
 }: {
 	user: UserRow;
 	busy: boolean;
-	onSetRole: (role: "admin" | "user") => void;
+	onSetRole: (role: "admin" | "member" | "user") => void;
 	onBan: () => void;
 	onUnban: () => void;
 	onRevokeSessions: () => void;
@@ -251,13 +254,17 @@ function UserRowView({
 					style={{ width: "auto", padding: "0.3rem 0.5rem", fontSize: "0.85rem" }}
 					value={role}
 					disabled={busy}
+					aria-label={`Role for ${user.email}`}
 					onChange={(e) => {
 						const next = e.target.value;
-						if (next === "admin" || next === "user") onSetRole(next);
+						if (next === "admin" || next === "member" || next === "user") {
+							onSetRole(next);
+						}
 					}}
 				>
-					<option value="user">user</option>
-					<option value="admin">admin</option>
+					<option value="user">user — no access</option>
+					<option value="member">member — projects</option>
+					<option value="admin">admin — full</option>
 				</select>
 			</td>
 

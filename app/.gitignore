@@ -34,3 +34,6 @@ dist/
 # Logs
 npm-debug.log*
 *.log
+
+# Vite framework build cache (TanStack Start)
+.tanstack/

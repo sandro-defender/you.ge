@@ -19,11 +19,19 @@ import { adminClient } from "better-auth/client/plugins";
  *
  * No secret value leaked (that code only reads a runtime env that does not exist
  * in a browser), but shipping server config plumbing to the browser is exactly
- * the habit that eventually does leak something. Keep this module importing only
- * from "better-auth/client".
+ * the habit that eventually does leak something. Keep this module importing
+ * only from "better-auth/client", "better-auth/client/plugins", and
+ * ./auth-roles (pure access-control Role objects — no env/db/secrets; see
+ * that file's doc comment). NEVER import ./auth here.
  */
+import { siteRoles } from "./auth-roles";
+
 export const authClient = createAuthClient({
-	plugins: [adminClient()],
+	// roles is REQUIRED for correct set-role types: without it,
+	// authClient.admin.setRole is typed `"user" | "admin"` only and granting
+	// the `member` role fails typecheck (TS2322), even though the endpoint
+	// would accept it. Mirrors admin({ roles: siteRoles }) in src/lib/auth.ts.
+	plugins: [adminClient({ roles: siteRoles })],
 });
 
 // NOTE: `useSession` is deliberately NOT re-exported. In 1.7.5 it is an Atom,

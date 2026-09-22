@@ -1,5 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
+import { ADMIN_ROLES, PROJECT_ROLES, hasRole } from "../lib/roles";
 import type { AppContext } from "./app";
 
 /**
@@ -44,9 +45,35 @@ export const requireSession = createMiddleware<AppContext>(async (c, next) => {
 export const requireAdmin = createMiddleware<AppContext>(async (c, next) => {
 	const session = c.get("session");
 
-	if (!session || session.user.role !== "admin") {
+	if (!session || !hasRole(session.user.role, ADMIN_ROLES)) {
 		throw new HTTPException(403, {
 			message: "Administrator access required.",
+		});
+	}
+
+	await next();
+});
+
+/**
+ * Require an explicit access grant: role ∈ {admin, member}.
+ *
+ * This is the API half of the ACCESS_POLICY "member" level in src/server.ts —
+ * a valid Google session alone (role "user") gets 403 here until an admin
+ * grants `member` from /admin/users. Run AFTER requireSession, which is what
+ * populates c.get("session").
+ */
+export const requireMember = createMiddleware<AppContext>(async (c, next) => {
+	const session = c.get("session");
+
+	if (!session) {
+		// requireSession should have caught this; fail closed anyway.
+		throw new HTTPException(401, { message: "Not signed in." });
+	}
+
+	if (!hasRole(session.user.role, PROJECT_ROLES)) {
+		throw new HTTPException(403, {
+			message:
+				"Your account has not been granted access yet. An administrator must approve it from the admin panel.",
 		});
 	}
 

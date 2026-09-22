@@ -6,7 +6,7 @@ import { createServices, type Services } from "./context";
 import { createAuthRouter } from "./auth-routes";
 import { createReposRouter } from "./repos-router";
 import { createAdminRouter } from "./admin-router";
-import { requireSession, requireAdmin } from "./guard";
+import { requireSession, requireAdmin, requireMember } from "./guard";
 
 /**
  * Hono's generic, declared once so every handler gets typed `c.env` (D1 and
@@ -63,8 +63,12 @@ export function createApp() {
 	//    /api/auth/admin/* endpoint the admin plugin provides ────────────────
 	app.route("/auth", createAuthRouter());
 
-	// ── Authenticated ───────────────────────────────────────────────────────
-	app.use("/projects/*", requireSession);
+	// ── Authenticated + explicitly granted ──────────────────────────────────
+	// Order matters: requireSession populates c.get("session"), which
+	// requireMember then reads. A plain sign-in (role "user") is NOT enough —
+	// an admin must have granted "member" from /admin/users. This mirrors the
+	// ACCESS_POLICY "member" entry in src/server.ts (pages and API must agree).
+	app.use("/projects/*", requireSession, requireMember);
 	app.route("/projects", createReposRouter());
 
 	// ── Admin only ──────────────────────────────────────────────────────────
