@@ -14,20 +14,39 @@
  *   worse, be followed by destructive statements against, existing tables.
  *
  * What it enforces, in order
- *   1. wrangler.jsonc database_name must start with the prefix "you.ge"
- *      (owner-settled rule; the recommended concrete name is "you.ge-portfolio").
+ *   1. wrangler.jsonc database_name must start with the prefix "you-ge"
+ *      (owner-settled rule; the recommended concrete name is "you-ge-main").
+ *      Renamed by owner instruction 2026-09-24 — the prefix was "you.ge" and
+ *      the recommended name "you.ge-portfolio" before. Same checks, new name.
  *   2. That name must resolve to the database_id in wrangler.jsonc.
- *   3. The target must be EMPTY — no user tables, no rows in `user`/`session`.
+ *   3. The target must be OURS, in one of exactly two ways:
+ *      a) EMPTY (no user tables) — a fresh database, safe to initialise; or
+ *      b) it carries THIS project's migration history: its d1_migrations
+ *         table contains a name matching a file in drizzle/. That is the
+ *         day-2+ case — our own live database, safe to keep migrating.
+ *      A database with user tables but NO recognisable migration history is
+ *      treated as FOREIGN and refused. That refusal is the whole point of
+ *      this script and it has not changed.
+ *
+ *      Policy note (owner instruction 2026-09-24): "allow writes to the D1
+ *      database, but only [ones] created by this project — or create it if
+ *      it doesn't exist". Before that instruction check 3 required EMPTY
+ *      unconditionally and day-2+ migrations needed --allow-non-empty; now
+ *      our own migration history is accepted as proof of ownership and the
+ *      flag is only needed for genuinely ambiguous targets.
  *
  * Escape hatch (deliberately ugly, on purpose)
  *   node scripts/d1-safety-check.mjs --allow-non-empty
  *
  * Nothing in this file writes to, alters, or deletes any database. It runs
- * exactly one read-only SELECT against sqlite_master.
+ * read-only SELECTs against sqlite_master and d1_migrations.
+ *
+ * Self-test (no network, no account needed):
+ *   node scripts/d1-safety-check.mjs --self-test
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { parseJsonc } from "./jsonc.mjs";
@@ -45,15 +64,17 @@ const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
  * change them here AND in scripts/d1-setup.mjs and scripts/grant-admin.mjs
  * at the same time.
  */
-const DB_NAME_PREFIX = "you.ge";
-const RECOMMENDED_DB_NAME = "you.ge-portfolio";
+const DB_NAME_PREFIX = "you-ge";
+const RECOMMENDED_DB_NAME = "you-ge-main";
 
 const ALLOW_NON_EMPTY = process.argv.includes("--allow-non-empty");
+const SELF_TEST = process.argv.includes("--self-test");
 
 const red = (s) => `\x1b[31m${s}\x1b[0m`;
 const green = (s) => `\x1b[32m${s}\x1b[0m`;
 const yellow = (s) => `\x1b[33m${s}\x1b[0m`;
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
+const dim = (s) => `\x1b[2m${s}\x1b[0m`;
 
 function fail(lines) {
 	console.error(`\n${red(bold("✖ D1 SAFETY CHECK FAILED"))}\n`);
@@ -100,6 +121,33 @@ function d1Rows(res) {
 	return null;
 }
 
+/**
+ * The ownership test for check 4: does the target's recorded migration
+ * history (d1_migrations.name values) match any file in our local drizzle/
+ * folder? Both the full filename and the stem count — wrangler records the
+ * filename with the .sql extension (runtime-verified against local D1).
+ * Pure function — unit-tested via --self-test.
+ */
+function isOursByHistory(remoteNames, localFiles) {
+	const local = new Set();
+	for (const f of localFiles) {
+		local.add(String(f));
+		local.add(String(f).replace(/\.sql$/, ""));
+	}
+	return remoteNames.some((n) => local.has(String(n)));
+}
+
+/** Migration files this project carries (drizzle/*.sql, sorted). [] on any error. */
+function listLocalMigrationFiles() {
+	try {
+		return readdirSync(path.join(APP_DIR, "drizzle"))
+			.filter((f) => typeof f === "string" && f.endsWith(".sql"))
+			.sort();
+	} catch {
+		return [];
+	}
+}
+
 function wranglerJson(args) {
 	const stdout = execFileSync("npx", ["wrangler", ...args, "--json"], {
 		cwd: APP_DIR,
@@ -141,6 +189,33 @@ function getBinding(cfg) {
 		]);
 	}
 	return bindings[0];
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Self-test: verify the pure logic with zero network access. Run by CI-humans
+// and agents in sandboxes without Cloudflare credentials.
+if (SELF_TEST) {
+	const assert = (cond, label) => {
+		if (!cond) {
+			console.error(`  ${red(bold(`✖ ${label}`))}`);
+			process.exit(1);
+		}
+		console.log(`  ${green("✔")} ${label}`);
+	};
+	const local = ["0000_volatile_thena.sql"];
+	assert(isOursByHistory(["0000_volatile_thena.sql"], local), "exact filename match → ours");
+	assert(isOursByHistory(["0000_volatile_thena"], local), "stem match → ours");
+	assert(isOursByHistory(["0000_volatile_thena.sql", "x.sql"], local), "mixed history with ≥1 ours → ours");
+	assert(!isOursByHistory(["someone_else_0000.sql"], local), "foreign names only → NOT ours");
+	assert(!isOursByHistory([], local), "empty history → NOT ours");
+	assert(!isOursByHistory(["0000_volatile_thena.sql"], []), "no local drizzle/ files → NOT ours (fail closed)");
+	assert(Array.isArray(d1Rows([{ results: [{ name: "x" }], success: true }])), "d1Rows standard envelope");
+	assert(d1Rows({ weird: true }) === null, "d1Rows unknown envelope → null (fail closed)");
+	assert(parseWranglerJson('banner\n[{"results":[],"success":true}]') !== null, "parseWranglerJson strips banners");
+	assert(parseWranglerJson("no json at all") === null, "parseWranglerJson without json → null");
+	assert(Array.isArray(listLocalMigrationFiles()) && listLocalMigrationFiles().length > 0, "drizzle/ migrations are readable");
+	console.log(`\n${green(bold("✔ self-test passed"))} — ownership logic verified\n`);
+	process.exit(0);
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -278,22 +353,81 @@ try {
 // wrangler's own bookkeeping table is expected after a first migration.
 const userTables = tables.filter((t) => t !== "d1_migrations");
 
-if (userTables.length > 0) {
-	if (!ALLOW_NON_EMPTY) {
+if (userTables.length === 0) {
+	ok(
+		`target is empty (${tables.length === 0 ? "no tables at all" : "only wrangler's d1_migrations"}) — fresh database, ours to initialise`,
+	);
+} else {
+	// Non-empty target: writes are allowed ONLY if this database was created
+	// by THIS project — proven by a d1_migrations entry matching a file in
+	// our local drizzle/ folder (owner policy, instruction of 2026-09-24).
+	let historyNames = null;
+	if (tables.includes("d1_migrations")) {
+		let rows;
+		try {
+			const res = wranglerJson([
+				"d1",
+				"execute",
+				configuredName,
+				"--remote",
+				"--command",
+				"SELECT name FROM d1_migrations",
+			]);
+			rows = d1Rows(res);
+		} catch (err) {
+			fail([
+				`Could not read the target's ${bold("d1_migrations")} table (read-only query`,
+				`failed), so ownership cannot be verified. Refusing to migrate.`,
+				``,
+				`  ${String(err.stderr ?? err.message).split("\n").join("\n  ").slice(0, 600)}`,
+			]);
+		}
+		if (rows === null) {
+			fail([
+				`Could not interpret wrangler's --json output (unrecognised envelope),`,
+				`so we cannot verify the migration history. Refusing to migrate.`,
+				`Raw output: ${JSON.stringify(rows).slice(0, 400)}`,
+			]);
+		}
+		historyNames = rows.map((r) => String(r?.name)).filter(Boolean);
+	}
+
+	const localFiles = listLocalMigrationFiles();
+	const ours = historyNames !== null && isOursByHistory(historyNames, localFiles);
+
+	if (ours) {
+		const matched = historyNames.find(
+			(n) => localFiles.includes(n) || localFiles.includes(`${n}.sql`),
+		);
+		ok(`non-empty, but it carries this project's migration history — ours`);
+		console.log(`    d1_migrations matches drizzle/: ${bold(matched)}`);
+		console.log(
+			dim(`    day-2+ migration on our own database — allowed (owner policy 2026-09-24)`),
+		);
+	} else if (ALLOW_NON_EMPTY) {
+		console.log(
+			`  ${yellow("⚠")} --allow-non-empty given: proceeding despite ${userTables.length} existing table(s)`,
+			`and NO migration history this project recognises.`,
+		);
+	} else {
 		fail([
-			`${red(bold(`"${configuredName}" is NOT empty.`))} It already contains:`,
+			`${red(bold(`"${configuredName}" has user tables but no migration history this project recognises.`))}`,
 			``,
-			`    ${userTables.map((t) => bold(t)).join(", ")}`,
+			`    tables found:              ${userTables.map((t) => bold(t)).join(", ")}`,
+			`    d1_migrations recorded:    ${historyNames === null ? "(table missing)" : historyNames.join(", ") || "(empty)"}`,
+			`    this project's drizzle/:   ${localFiles.join(", ") || "(none found)"}`,
 			``,
-			`This looks like an ${bold("existing database you already use")}. Migrating`,
-			`into it could collide with or destroy that data, so this script stops here.`,
+			`A database with tables but none of OUR migration names is treated as`,
+			`${bold("someone else's database")} — migrating into it could collide with or`,
+			`destroy that data. This refusal is the guard that protects databases you`,
+			`already use, and it has not changed.`,
 			``,
 			`Do this instead:`,
 			``,
-			`  1. ${bold("npm run d1:list")}                  ← see all your databases`,
-			`  2. ${bold(`npx wrangler d1 create ${RECOMMENDED_DB_NAME}`)}   ← make a NEW one`,
-			`  3. paste the new uuid into ${bold("wrangler.jsonc")}`,
-			`  4. re-run this check`,
+			`  1. ${bold("npm run d1:list")}    ← see all your databases`,
+			`  2. ${bold("npm run d1:setup")}   ← creates ${RECOMMENDED_DB_NAME} if it is missing`,
+			`     (it only ever creates the prefixed name — never touches anything else)`,
+			`  3. wire the new uuid into ${bold("wrangler.jsonc")} and re-run`,
 			``,
 			`If — and only if — you are certain those tables are disposable and belong`,
 			`to nothing you care about, you may override with:`,
@@ -301,11 +435,6 @@ if (userTables.length > 0) {
 			`    ${yellow("node scripts/d1-safety-check.mjs --allow-non-empty")}`,
 		]);
 	}
-	console.log(
-		`  ${yellow("⚠")} --allow-non-empty given: proceeding despite ${userTables.length} existing table(s).`,
-	);
-} else {
-	ok(`target is empty (${tables.length === 0 ? "no tables at all" : "only wrangler's d1_migrations"})`);
 }
 
 console.log(`\n${green(bold("✔ Safe to migrate"))} — ${bold(configuredName)} (${configuredId.slice(0, 8)}…)\n`);

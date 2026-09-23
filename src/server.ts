@@ -37,11 +37,54 @@ import { createApp } from "./server/app";
 import { createAuth } from "./lib/auth";
 import { createDb } from "./lib/db";
 import { syncGithubRepos } from "./server/github-sync";
+import { gatePage, serverErrorPage } from "./server/gate-page";
 import { INTERNAL_SESSION_HEADER as SESSION_HEADER } from "./lib/internal-header";
 import { ADMIN_ROLES, PROJECT_ROLES, hasRole } from "./lib/roles";
 import type { Env } from "./lib/env";
 
 const app = createApp();
+
+/**
+ * SECURITY HEADERS FOR PAGES (R6 finding).
+ *
+ * Hono's `secureHeaders()` (src/server/app.ts) covers ONLY /api/* — pages are
+ * rendered by `startHandler` here and never pass through Hono, so without
+ * this helper the HTML documents (the clickjacking/Sniffing surface that
+ * matters most) shipped with no x-frame-options, no nosniff, nothing.
+ *
+ * The set mirrors hono's secureHeaders DEFAULTS exactly (verified against
+ * node_modules/hono/dist/middleware/secure-headers/secure-headers.js):
+ * COEP deliberately OFF, the eleven below ON. If you customise secureHeaders
+ * in app.ts, mirror the change here — drift between the two halves is
+ * invisible to any test that only curls the API.
+ */
+const PAGE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
+	"cross-origin-resource-policy": "same-origin",
+	"cross-origin-opener-policy": "same-origin",
+	"origin-agent-cluster": "?1",
+	"referrer-policy": "no-referrer",
+	"strict-transport-security": "max-age=15552000; includeSubDomains",
+	"x-content-type-options": "nosniff",
+	"x-dns-prefetch-control": "off",
+	"x-download-options": "noopen",
+	"x-frame-options": "SAMEORIGIN",
+	"x-permitted-cross-domain-policies": "none",
+	"x-xss-protection": "0",
+};
+
+/** Copy a Response with the page security headers applied. */
+function withSecurityHeaders(res: Response): Response {
+	const headers = new Headers(res.headers);
+	for (const [name, value] of Object.entries(PAGE_SECURITY_HEADERS)) {
+		if (!headers.has(name)) headers.set(name, value);
+	}
+	// res.body may be a live SSR stream — pass it through untouched.
+	return new Response(res.body, {
+		status: res.status,
+		statusText: res.statusText,
+		headers,
+	});
+}
 
 /**
  * Which paths require what. Longest prefix wins.
@@ -70,6 +113,31 @@ export default {
 		const url = new URL(cleanRequest.url);
 		const { pathname } = url;
 
+		// ── 0. Crawler files → served here, never reach the router (R7) ────
+		// Without this, /robots.txt falls through to the `$` splat and returns
+		// the (now real) 404 page — valid, but a plain robots.txt is cheaper
+		// for crawlers and keeps the policy next to ACCESS_POLICY, which it
+		// mirrors: the ONLY crawlable surface of this site is `/`.
+		// No third-party deps, no D1 reads — Workers Free friendly.
+		if (pathname === "/robots.txt" || pathname === "/sitemap.xml") {
+			const isSitemap = pathname === "/sitemap.xml";
+			const body = isSitemap
+				? `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://you.ge/</loc></url>\n</urlset>\n`
+				: `User-agent: *\nDisallow: /projects\nDisallow: /admin\nDisallow: /login\nDisallow: /api/\n\nSitemap: https://you.ge/sitemap.xml\n`;
+			return withSecurityHeaders(
+				new Response(body, {
+					headers: {
+						"content-type": isSitemap
+							? "application/xml; charset=utf-8"
+							: "text/plain; charset=utf-8",
+						// These change only at deploy time; an hour of shared
+						// caching is fine and keeps bots cheap.
+						"cache-control": "public, max-age=3600",
+					},
+				}),
+			);
+		}
+
 		// ── 1. API → Hono ───────────────────────────────────────────────────
 		if (pathname === "/api" || pathname.startsWith("/api/")) {
 			const apiRequest = new Request(
@@ -93,39 +161,73 @@ export default {
 			if (!session) {
 				// Preserve the intended destination so login can return to it.
 				const next = encodeURIComponent(pathname + url.search);
-				return Response.redirect(`${url.origin}/login?next=${next}`, 302);
+				return withSecurityHeaders(
+					Response.redirect(`${url.origin}/login?next=${next}`, 302),
+				);
 			}
 
 			if (session.user.banned) {
-				return plainText(
-					403,
-					session.user.banReason ?? "Your access to this site has been suspended.",
-				);
+				// banReason is stored admin-set text — gatePage HTML-escapes it.
+				return gatePage({
+					status: 403,
+					kind: "suspended",
+					title: "Access suspended",
+					message:
+						session.user.banReason ??
+						"Your access to this site has been suspended.",
+				});
 			}
 
 			// Explicit grant: signing in is not enough for /projects — an admin
 			// must have set role to "member" (or "admin") from /admin/users.
+			// COPY IS LOAD-BEARING: scripts/role-matrix-smoke.sh matches
+			// "not been granted" in this body, and the same string comes from
+			// requireMember for the API. Change both together or neither.
 			if (rule.requires === "member" && !hasRole(session.user.role, PROJECT_ROLES)) {
-				return plainText(
-					403,
-					"Your account has not been granted access yet. An administrator must approve it from the admin panel.",
-				);
+				return gatePage({
+					status: 403,
+					kind: "pending",
+					title: "Access pending",
+					message:
+						"Your account has not been granted access yet. An administrator must approve it from the admin panel.",
+					hint: "Already approved? Role changes can take up to five minutes to reach your session — check back shortly.",
+				});
 			}
 
 			if (rule.requires === "admin" && !hasRole(session.user.role, ADMIN_ROLES)) {
-				return plainText(403, "Administrator access required.");
+				return gatePage({
+					status: 403,
+					kind: "denied",
+					title: "Admin area",
+					message: "Administrator access required.",
+					hint: "This area is restricted to administrator accounts.",
+				});
 			}
 
 			// Start's handler is typed (request, options?) => Response and never
 			// receives env — which is precisely why the permission check above has
 			// to live here in the Worker entry rather than inside a route loader.
-			return startHandler.fetch(withSessionHeader(cleanRequest, session));
+			// Errors escaping Start's own error handling land in the catch below:
+			// the user gets a branded 500 with no stack, the log gets the truth.
+			try {
+				return withSecurityHeaders(
+					await startHandler.fetch(withSessionHeader(cleanRequest, session)),
+				);
+			} catch (err) {
+				console.error("[ssr] gated render failed:", err);
+				return serverErrorPage();
+			}
 		}
 
 		// ── 3. Public pages → render ────────────────────────────────────────
 		// Static assets (CSS, JS, images) are served by the platform from
 		// `assets.directory` and never reach this code at all.
-		return startHandler.fetch(cleanRequest);
+		try {
+			return withSecurityHeaders(await startHandler.fetch(cleanRequest));
+		} catch (err) {
+			console.error("[ssr] public render failed:", err);
+			return serverErrorPage();
+		}
 	},
 
 	/**
@@ -191,12 +293,5 @@ function withSessionHeader(
 		headers,
 		body: hasBody ? request.body : undefined,
 		redirect: "manual",
-	});
-}
-
-function plainText(status: number, message: string): Response {
-	return new Response(message, {
-		status,
-		headers: { "content-type": "text/plain; charset=utf-8" },
 	});
 }

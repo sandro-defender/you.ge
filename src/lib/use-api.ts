@@ -69,14 +69,14 @@ export function useApi<T>(url: string) {
 }
 
 /**
- * POST/PATCH helper for admin mutations.
+ * POST/PATCH/DELETE (and GET for polling) helper for admin mutations.
  *
  * Returns the parsed body, or throws with the server's own message so the UI can
  * show something more useful than "failed".
  */
 export async function apiSend<T>(
 	url: string,
-	init: { method: "POST" | "PATCH" | "DELETE"; body?: unknown },
+	init: { method: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown },
 ): Promise<T> {
 	const res = await fetch(url, {
 		method: init.method,

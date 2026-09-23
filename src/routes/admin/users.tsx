@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { authClient } from "../../lib/auth-client";
+import { authClient, useAuthSession } from "../../lib/auth-client";
 
 /**
  * Users & access — the page that satisfies "admin panel where I can grant
@@ -37,11 +37,13 @@ type UserRow = {
 };
 
 function AdminUsers() {
+	const { user: me } = useAuthSession();
 	const [users, setUsers] = useState<UserRow[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [busyId, setBusyId] = useState<string | null>(null);
 	const [search, setSearch] = useState("");
+	const [roleFilter, setRoleFilter] = useState<"all" | "user" | "member" | "admin">("all");
 
 	const load = useCallback(async () => {
 		setLoading(true);
@@ -83,6 +85,7 @@ function AdminUsers() {
 	}
 
 	const visible = (users ?? []).filter((u) => {
+		if (roleFilter !== "all" && (u.role ?? "user") !== roleFilter) return false;
 		if (!search.trim()) return true;
 		const needle = search.toLowerCase();
 		return (
@@ -91,28 +94,53 @@ function AdminUsers() {
 		);
 	});
 
+	// CLIENT-SIDE BELT for the last-admin rule. The braces are server-side:
+	// databaseHooks in src/lib/auth.ts rejects the demotion with 400 even if
+	// this UI is bypassed entirely (curl, two tabs, a stale list…). This just
+	// makes the impossible action hard to click in the first place.
+	const adminCount = (users ?? []).filter((u) => u.role === "admin").length;
+	const lastAdminIsMe = me?.role === "admin" && adminCount === 1;
+
 	return (
 		<div>
 			<div className="spread" style={{ marginBottom: "1rem" }}>
 				<h2 style={{ margin: 0 }}>Users &amp; access</h2>
 				<div className="row">
-					<input
-						className="input"
-						style={{ width: "15rem" }}
-						type="search"
-						placeholder="Filter by name or email…"
-						value={search}
-						onChange={(e) => setSearch(e.target.value)}
-					/>
-					<button
-						type="button"
-						className="btn btn-sm"
-						onClick={() => void load()}
-						disabled={loading}
-					>
-						{loading ? <span className="spinner" /> : "Refresh"}
-					</button>
-				</div>
+						<input
+							className="input"
+							style={{ width: "14rem" }}
+							type="search"
+							placeholder="Filter by name or email…"
+							value={search}
+							aria-label="Filter users by name or email"
+							onChange={(e) => setSearch(e.target.value)}
+						/>
+						<select
+							className="select"
+							style={{ width: "auto", padding: "0.45rem 0.6rem" }}
+							value={roleFilter}
+							aria-label="Filter users by role"
+							onChange={(e) => {
+								const v = e.target.value;
+								if (v === "all" || v === "user" || v === "member" || v === "admin") {
+									setRoleFilter(v);
+								}
+							}}
+						>
+							<option value="all">All roles ({(users ?? []).length})</option>
+							<option value="user">user — no access</option>
+							<option value="member">member — projects</option>
+							<option value="admin">admin — full</option>
+						</select>
+						<button
+							type="button"
+							className="btn btn-sm"
+							onClick={() => void load()}
+							disabled={loading}
+						>
+							{loading ? <span className="spinner" /> : "Refresh"}
+						</button>
+					</div>
 			</div>
 
 			<div className="notice" style={{ marginBottom: "1rem" }}>
@@ -165,12 +193,14 @@ function AdminUsers() {
 									</td>
 								</tr>
 							) : (
-								visible.map((user) => (
-									<UserRowView
-										key={user.id}
-										user={user}
-										busy={busyId === user.id}
-										onSetRole={(role) =>
+							visible.map((user) => (
+								<UserRowView
+									key={user.id}
+									user={user}
+									busy={busyId === user.id}
+									isSelf={user.id === me?.id}
+									blockDemotion={user.id === me?.id && lastAdminIsMe}
+									onSetRole={(role) =>
 											void run(user.id, () =>
 												authClient.admin.setRole({ userId: user.id, role }),
 											)
@@ -207,6 +237,8 @@ function AdminUsers() {
 function UserRowView({
 	user,
 	busy,
+	isSelf,
+	blockDemotion,
 	onSetRole,
 	onBan,
 	onUnban,
@@ -214,12 +246,17 @@ function UserRowView({
 }: {
 	user: UserRow;
 	busy: boolean;
+	isSelf: boolean;
+	blockDemotion: boolean;
 	onSetRole: (role: "admin" | "member" | "user") => void;
 	onBan: () => void;
 	onUnban: () => void;
 	onRevokeSessions: () => void;
 }) {
 	const role = user.role ?? "user";
+	const lockTitle = blockDemotion
+		? "You are the only administrator — grant another user the admin role before demoting yourself."
+		: undefined;
 
 	return (
 		<tr>
@@ -240,7 +277,15 @@ function UserRowView({
 						</span>
 					)}
 					<div style={{ minWidth: 0 }}>
-						<div style={{ fontWeight: 550 }}>{user.name}</div>
+						<div style={{ fontWeight: 550 }}>
+							{user.name}
+							{isSelf ? (
+								<span className="dim" style={{ fontWeight: 400 }}>
+									{" "}
+									(you)
+								</span>
+							) : null}
+						</div>
 						<div className="dim" style={{ overflowWrap: "anywhere" }}>
 							{user.email}
 						</div>
@@ -255,6 +300,7 @@ function UserRowView({
 					value={role}
 					disabled={busy}
 					aria-label={`Role for ${user.email}`}
+					title={lockTitle}
 					onChange={(e) => {
 						const next = e.target.value;
 						if (next === "admin" || next === "member" || next === "user") {
@@ -262,8 +308,12 @@ function UserRowView({
 						}
 					}}
 				>
-					<option value="user">user — no access</option>
-					<option value="member">member — projects</option>
+					<option value="user" disabled={blockDemotion}>
+						user — no access
+					</option>
+					<option value="member" disabled={blockDemotion}>
+						member — projects
+					</option>
 					<option value="admin">admin — full</option>
 				</select>
 			</td>

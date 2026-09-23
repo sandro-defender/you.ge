@@ -1,5 +1,6 @@
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import { getServerSession, type SessionUser } from "../../lib/session-fn";
+import { safeLoader } from "../../lib/safe-loader";
 
 /**
  * Admin layout.
@@ -12,9 +13,9 @@ export const Route = createFileRoute("/admin")({
 	head: () => ({
 		meta: [{ title: "Admin — you.ge" }],
 	}),
-	loader: async () => ({
+	loader: safeLoader(async () => ({
 		session: await getServerSession(),
-	}),
+	})),
 	component: AdminLayout,
 });
 

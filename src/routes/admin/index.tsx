@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useApi } from "../../lib/use-api";
+import { SyncNowButton } from "../../components/SyncNowButton";
 import type { SyncRun } from "../../lib/types";
 
 export const Route = createFileRoute("/admin/")({
@@ -7,7 +8,9 @@ export const Route = createFileRoute("/admin/")({
 });
 
 function AdminHome() {
-	const { data, loading, error } = useApi<{ runs: SyncRun[] }>("/api/admin/sync-log");
+	const { data, loading, error, refetch } = useApi<{ runs: SyncRun[] }>(
+		"/api/admin/sync-log",
+	);
 	const runs = data?.runs ?? [];
 	const latest = runs[0];
 
@@ -29,7 +32,10 @@ function AdminHome() {
 			</div>
 
 			<div className="card">
-				<h2 style={{ fontSize: "1.15rem" }}>GitHub sync</h2>
+				<div className="spread" style={{ marginBottom: "0.25rem" }}>
+					<h2 style={{ fontSize: "1.15rem", margin: 0 }}>GitHub sync</h2>
+					<SyncNowButton onFinished={refetch} />
+				</div>
 				<p className="muted" style={{ fontSize: "0.92rem" }}>
 					Runs automatically every 6 hours via a Workers cron trigger. Scheduled
 					invocations are free and do not count against the 100k requests/day
@@ -64,6 +70,24 @@ function AdminHome() {
 					<p className="dim" style={{ margin: "0.5rem 0 0" }}>
 						{latest.message}
 					</p>
+				) : null}
+
+				{runs.length > 1 ? (
+					<div style={{ marginTop: "1rem", borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+						<div className="dim" style={{ marginBottom: "0.4rem" }}>
+							Recent runs
+						</div>
+						<ul className="run-list">
+							{runs.slice(0, 5).map((run) => (
+								<li key={String(run.id)}>
+									<StatusBadge status={run.status} />
+									<span className="dim">
+										{formatDate(run.runAt)} · {run.repoCount} repos · {run.durationMs}ms
+									</span>
+								</li>
+							))}
+						</ul>
+					</div>
 				) : null}
 			</div>
 		</div>

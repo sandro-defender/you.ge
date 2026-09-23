@@ -10,6 +10,30 @@ import { useAuthSession } from "../lib/auth-client";
  * security hole the moment someone prerenders a gated route.
  */
 export const Route = createFileRoute("/")({
+	/**
+	 * The ONLY indexable page (R7). `meta` merge dedupes by name/property and
+	 * the most-specific route wins (verified against installed
+	 * @tanstack/react-router), so these entries override the root's
+	 * fail-closed `robots: noindex` and generic og:title/description/url.
+	 * og:image/twitter:card inherit from the root.
+	 */
+	head: () => ({
+		meta: [
+			{ title: "you.ge — Sandro's web projects" },
+			{ name: "robots", content: "index, follow" },
+			{
+				property: "og:title",
+				content: "you.ge — Sandro's web projects",
+			},
+			{
+				property: "og:description",
+				content:
+					"I build things for the web. This site is a gated index of my GitHub projects — sign in with Google and an administrator grants access.",
+			},
+			{ property: "og:url", content: "https://you.ge/" },
+		],
+		links: [{ rel: "canonical", href: "https://you.ge/" }],
+	}),
 	component: Home,
 });
 

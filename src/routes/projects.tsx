@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { getServerSession, type SessionUser } from "../lib/session-fn";
+import { safeLoader } from "../lib/safe-loader";
 import type { PublicProject } from "../lib/types";
 
 /**
@@ -19,14 +20,19 @@ import type { PublicProject } from "../lib/types";
  * a self-fetch is not. So: the loader pulls the session from the internal header
  * (no I/O), and the project list is fetched client-side after hydration, where
  * "/api/projects" is a normal same-origin browser request.
+ *
+ * ── RETRY (R4) ──────────────────────────────────────────────────────────────
+ * The fetch depends on a `reloadKey` counter, so the "Try again" button on the
+ * error state re-runs it (resetting state first so the skeleton comes back)
+ * instead of asking the user to refresh the whole page.
  */
 export const Route = createFileRoute("/projects")({
 	head: () => ({
 		meta: [{ title: "Projects — you.ge" }],
 	}),
-	loader: async () => ({
+	loader: safeLoader(async () => ({
 		session: await getServerSession(),
-	}),
+	})),
 	component: Projects,
 });
 
@@ -39,9 +45,15 @@ function Projects() {
 	const { session } = Route.useLoaderData() as { session: SessionUser | null };
 	const [projects, setProjects] = useState<PublicProject[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [reloadKey, setReloadKey] = useState(0);
 
 	useEffect(() => {
 		let cancelled = false;
+
+		// Drop any stale error/list from a previous attempt so the skeleton
+		// (not the old error) shows while this one is in flight.
+		setProjects(null);
+		setError(null);
 
 		void (async () => {
 			try {
@@ -68,7 +80,9 @@ function Projects() {
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [reloadKey]);
+
+	const reload = useCallback(() => setReloadKey((k) => k + 1), []);
 
 	return (
 		<div style={{ paddingTop: "2rem" }}>
@@ -80,7 +94,8 @@ function Projects() {
 						{session ? ` Signed in as ${session.email}.` : ""}
 					</p>
 				</div>
-				<span className="badge">
+				{/* role=status announces "loading" → "N visible" politely. */}
+				<span className="badge" role="status" aria-live="polite">
 					{projects === null ? "loading" : `${projects.length} visible`}
 				</span>
 			</div>
@@ -91,7 +106,15 @@ function Projects() {
 					<p className="muted" style={{ margin: "0.4rem 0 0" }}>
 						{error}
 					</p>
-					<p className="dim" style={{ margin: "0.6rem 0 0" }}>
+					<div className="row" style={{ gap: "0.75rem", marginTop: "0.9rem" }}>
+						<button type="button" className="btn btn-sm" onClick={reload}>
+							↻ Try again
+						</button>
+						<Link to="/" className="btn btn-sm">
+							Back to home
+						</Link>
+					</div>
+					<p className="dim" style={{ margin: "0.8rem 0 0" }}>
 						If this persists, the GitHub sync may not have run yet. An admin can
 						trigger it from <Link to="/admin/repos">the admin panel</Link>.
 					</p>
@@ -124,40 +147,35 @@ function Projects() {
 function ProjectCard({ project }: { project: PublicProject }) {
 	return (
 		<a
-			className="card card-hover"
+			className="card card-hover project-card"
 			href={project.url}
 			target="_blank"
 			rel="noreferrer noopener"
-			style={{ display: "block" }}
 		>
-			<div className="spread" style={{ marginBottom: "0.5rem" }}>
-				<h3 style={{ margin: 0, fontSize: "1.05rem" }}>{project.name}</h3>
+			<div className="spread">
+				<h3 className="project-name">
+					{project.name}
+					{/* External-link affordance: the whole card is the link, so the
+					    arrow says "this opens on github.com". */}
+					<span className="ext-arrow" aria-hidden="true">
+						↗
+					</span>
+				</h3>
 				{project.featured ? <span className="badge badge-accent">Featured</span> : null}
 			</div>
 
-			<p
-				className="muted"
-				style={{
-					fontSize: "0.92rem",
-					margin: "0 0 0.9rem",
-					// Keep card heights even without hard truncation.
-					display: "-webkit-box",
-					WebkitLineClamp: 3,
-					WebkitBoxOrient: "vertical",
-					overflow: "hidden",
-				}}
-			>
+			<p className="project-desc">
 				{project.description ?? <span className="dim">No description.</span>}
 			</p>
 
-			<div className="row" style={{ gap: "0.4rem" }}>
+			<div className="row">
 				{project.language ? <span className="badge">{project.language}</span> : null}
 				<span className="badge">★ {formatCount(project.stars)}</span>
 				<span className="badge">⑂ {formatCount(project.forks)}</span>
 			</div>
 
 			{project.topics.length > 0 ? (
-				<div className="row" style={{ gap: "0.3rem", marginTop: "0.7rem" }}>
+				<div className="row">
 					{project.topics.slice(0, 4).map((topic) => (
 						<span key={topic} className="dim" style={{ fontSize: "0.75rem" }}>
 							#{topic}
@@ -165,6 +183,11 @@ function ProjectCard({ project }: { project: PublicProject }) {
 					))}
 				</div>
 			) : null}
+
+			<div className="card-meta">
+				<span>{project.pushedAt ? `Updated ${relativeTime(project.pushedAt)}` : ""}</span>
+				<span className="ext-hint">View on GitHub</span>
+			</div>
 		</a>
 	);
 }
@@ -190,4 +213,31 @@ function ProjectSkeleton() {
 function formatCount(n: number): string {
 	if (n < 1000) return String(n);
 	return `${(n / 1000).toFixed(1)}k`;
+}
+
+/**
+ * Coarse relative time for "Updated …" (client-side render only — the card grid
+ * is produced after hydration, so there is no SSR/hydration time mismatch to
+ * worry about). Unparseable input renders as empty, never "NaN".
+ */
+function relativeTime(iso: string): string {
+	const ms = Date.now() - Date.parse(iso);
+	if (!Number.isFinite(ms) || ms < 0) return "";
+
+	const minutes = ms / 60_000;
+	if (minutes < 1) return "just now";
+	if (minutes < 60) return plural(Math.round(minutes), "minute");
+	const hours = minutes / 60;
+	if (hours < 24) return plural(Math.round(hours), "hour");
+	const days = hours / 24;
+	if (days < 8) return plural(Math.round(days), "day");
+	const weeks = days / 7;
+	if (weeks < 5) return plural(Math.round(weeks), "week");
+	const months = days / 30.44;
+	if (months < 12) return plural(Math.round(months), "month");
+	return plural(Math.round(days / 365.25), "year");
+}
+
+function plural(n: number, unit: string): string {
+	return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
 }

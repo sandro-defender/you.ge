@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
 import { signIn, useAuthSession } from "../lib/auth-client";
+// Open-redirect guard for `?next=` — a dependency-free leaf so
+// scripts/next-guard-test.mjs can unit-test it (see lib/next.ts).
+import { sanitiseNext } from "../lib/next";
 
 /**
  * Sign-in page.
@@ -10,6 +13,9 @@ import { signIn, useAuthSession } from "../lib/auth-client";
  * instead of dumping everyone on the homepage.
  */
 export const Route = createFileRoute("/login")({
+	// robots stays the root's fail-closed noindex (login pages are not worth
+	// indexing); the og defaults also inherit from the root.
+	head: () => ({ meta: [{ title: "Sign in — you.ge" }] }),
 	validateSearch: (search: Record<string, unknown>): { next?: string } => ({
 		next: typeof search.next === "string" ? search.next : undefined,
 	}),
@@ -112,15 +118,3 @@ function Login() {
 	);
 }
 
-/**
- * Accept only a same-origin relative path; everything else falls back to
- * /projects. Rejects protocol-relative URLs ("//evil.tld") too, which browsers
- * treat as absolute.
- */
-function sanitiseNext(next: string | undefined): string {
-	if (!next) return "/projects";
-	if (!next.startsWith("/")) return "/projects";
-	if (next.startsWith("//")) return "/projects";
-	if (next.includes("\\")) return "/projects";
-	return next;
-}
