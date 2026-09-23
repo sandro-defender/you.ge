@@ -42,7 +42,7 @@ Other everyday commands:
 | `npm run preview` | Preview the built worker locally |
 | `npm run typecheck` | `tsc --noEmit` — must stay at 0 errors |
 | `npm run d1:safety` | D1 migration guard (see [D1 safety](#d1-safety)) — **expect exit 1 while `database_id` is a placeholder** |
-| `npm run d1:setup` | Read-only listing of D1 databases in the account (never creates anything) |
+| `npm run d1:setup` | Lists every D1 database (read-only, marks others DO NOT TOUCH); **creates `you-ge-main` and wires its id into wrangler.jsonc only if no `you-ge*` database exists yet** |
 | `npm run db:migrate:local` | Apply `drizzle/` migrations to the **local** Miniflare DB |
 | `npm run db:generate` | Generate a migration from schema changes (drizzle-kit) |
 | `npm run db:studio` | Drizzle Studio (local DB) |
@@ -206,18 +206,22 @@ factory-based D1 config (HANDOVER §7).
 ## D1 safety — non-negotiable
 
 **Never create, read, migrate, or touch any D1 database in the Cloudflare
-account except a brand-new one whose name starts with the reserved prefix
-`you-ge` (recommended: `you-ge-main` — renamed by owner instruction
-2026-09-24). Local Miniflare SQLite (`--local`)
+account except this project's own: a database whose name starts with the
+reserved prefix `you-ge` (recommended: `you-ge-main`) AND is provably ours —
+empty, or carrying this project's migration history. Local Miniflare SQLite (`--local`)
 is fine. Never run anything with `--remote` against a database that fails the
-prefix or empty checks.**
+prefix or ownership checks.**
 
 * `scripts/d1-safety-check.mjs` runs automatically before
   `npm run db:migrate:remote` and refuses unless:
-  1. `database_name` starts with `you.ge` (owner-settled prefix rule),
+  1. `database_name` starts with `you-ge` (owner-settled prefix rule),
   2. that name resolves to the configured `database_id`,
-  3. the target has **no user tables** (the `d1 execute --json` envelope parse
-     is fail-closed: an unrecognised output shape aborts rather than passing).
+  3. the target is **provably ours**: empty (fresh), or its `d1_migrations`
+     history matches a file in `drizzle/` (our own live DB — owner policy
+     2026-09-24). Tables with **no** recognised history are treated as
+     someone else's database and refused. The `d1 execute --json` envelope
+     parse is fail-closed: an unrecognised output shape aborts rather than
+     passing.
 * The migrate scripts use the **binding name** `DB`, so they always follow
   `wrangler.jsonc` (wrangler resolves "the name or binding of the DB") — no
   hardcoded name to drift from the config.
@@ -227,9 +231,14 @@ prefix or empty checks.**
   block-comment-before-line-comment regex silently deletes `main`,
   `d1_databases` and `triggers` before any guard runs (this exact bug was
   found and fixed; see `git log` for `jsonc.mjs`).
-* `scripts/d1-setup.mjs` is **read-only**: it runs `wrangler d1 list` and
-  prints the `d1 create` command for a human to run. No script in this repo
-  creates or migrates a database on its own.
+* `scripts/d1-setup.mjs` lists all databases read-only (unprefixed ones are
+  marked DO NOT TOUCH) and, when no `you-ge*` database exists, **creates
+  `you-ge-main` and wires its uuid into wrangler.jsonc itself** (owner
+  instruction 2026-09-24). It never touches an unprefixed database, never
+  auto-wires an *existing* prefixed one (existing ≠ provably ours), and never
+  migrates anything — that stays behind `db:migrate:remote` + the safety
+  check. Both scripts carry a `--self-test` that verifies their pure logic
+  offline (`node scripts/d1-safety-check.mjs --self-test`).
 * Workers Free D1 caps (since 2026-09-01, exceeding a daily cap **hard-fails
   every query** until 00:00 UTC): 5M rows **scanned**/day, 100k rows
   written/day, 5 GB storage. Indexes are quota control, not just perf.
@@ -243,9 +252,11 @@ prefix `you-ge` (recommended concrete name: `you-ge-main` — the scripts
 enforce the prefix; see [D1 safety](#d1-safety)):
 
 ```bash
-npm run d1:setup                                   # read-only: lists existing DBs
-npx wrangler d1 create you-ge-main                 # NEW database (prefix rule)
-# paste the printed uuid into wrangler.jsonc "database_id"
+npm run d1:setup                                   # lists existing DBs; creates
+                                                   # you-ge-main + wires its id
+                                                   # if no you-ge* DB exists yet
+# (equivalent by hand: npx wrangler d1 create you-ge-main, then paste the
+#  printed uuid into wrangler.jsonc "database_id")
 npm run d1:safety                                  # must pass now (exit 0)
 npm run db:migrate:remote                          # chains the safety check first
 npx wrangler secret put BETTER_AUTH_SECRET         # generate: openssl rand -base64 32
@@ -316,18 +327,23 @@ curl -s https://you.ge/ | grep -o '<title>[^<]*</title>'              # you.ge �
 
 ### Apply a new migration to the live DB
 
-`npm run db:migrate:remote` chains the safety guard, which **refuses to
-touch a database that already has tables**. On day one that is exactly right
-(your fresh `you-ge-main` is empty). On day 2+ your own DB legitimately
-has tables, so re-run the exact command the guard prints:
+Just run `npm run db:migrate:remote`. The safety guard accepts your own
+database once it recognises this project's migration history in
+`d1_migrations` (owner policy 2026-09-24: writes allowed to databases
+created by this project) — so day-2+ migrations on `you-ge-main` need no
+flags.
+
+What it still refuses, always: a database with tables but **no migration
+history this project recognises** — that is treated as someone else's
+database. If you are certain a target is a disposable abandoned attempt of
+ours, the deliberately-ugly override is:
 
 ```bash
 node scripts/d1-safety-check.mjs --allow-non-empty && \
 npx wrangler d1 migrations apply DB --remote
 ```
 
-The flag is intentionally ugly: it means "I checked the database_name is my
-own `you-ge*` DB". Never use it to point at anything else.
+Never use that flag to point at anything unprefixed.
 
 ### Rotate a secret
 

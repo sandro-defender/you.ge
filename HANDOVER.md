@@ -21,16 +21,19 @@ contradict popular tutorials; each one says why and how it was verified.
 > Drizzle + D1, one Worker. Reasoning is in §2.
 >
 > **Hard constraints (all standing, owner-updated 2026-09-22):**
-> 1. In the user's Cloudflare account, create/migrate ONLY a D1 database
->    whose name starts with the prefix **`you-ge`** (recommended:
->    `you-ge-main`; renamed by owner instruction 2026-09-24 — the prefix was
->    `you.ge` and the name `you.ge-portfolio` before). Never read/modify any
->    other remote DB. Local
->    Miniflare SQLite (`--local`) is always fine. Never run anything with
->    `--remote` against a database that fails the prefix or empty checks.
->    `scripts/d1-safety-check.mjs` enforces the prefix + empty rules and must
->    not be weakened (its `d1 execute --json` parse is deliberately
->    fail-closed — keep it that way).
+> 1. In the user's Cloudflare account, write ONLY to this project's own D1
+>    database: name starts with the prefix **`you-ge`** (recommended:
+>    `you-ge-main`) AND it is provably ours — empty, or carrying our
+>    migration history (owner instruction 2026-09-24: "allow writes, but
+>    only to databases created by this project — create it if it doesn't
+>    exist"; before that the rule was prefix + must-be-empty, name
+>    `you.ge-portfolio`). If it doesn't exist, `npm run d1:setup` creates
+>    and wires it. Never read/modify any other remote DB. Local Miniflare
+>    SQLite (`--local`) is always fine. Never run anything with `--remote`
+>    against a database that fails the prefix or ownership checks.
+>    `scripts/d1-safety-check.mjs` enforces the rules and the foreign-DB
+>    refusal in it must not be weakened (its `d1 execute --json` parse is
+>    deliberately fail-closed — keep it that way).
 > 2. Layout (owner-settled): **the project lives at the repo root** — there is
 >    no `app/` folder and the old casino/games site files are removed (they
 >    exist only in git history). Do not reintroduce files outside the project.
@@ -208,6 +211,27 @@ Requirements, verbatim from the user:
     recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
     suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
+- **Owner instruction (2026-09-24, later the same day): D1 write policy
+  evolved.** "Allow writes to the D1 database, but only [databases] created
+  by this project — or create it if it doesn't exist." Two changes, both
+  implemented without weakening the foreign-DB refusal:
+  - `d1-safety-check.mjs` check 4 is now an OWNERSHIP test, not an
+    emptiness test: empty targets pass (fresh DBs), and non-empty targets
+    pass when their `d1_migrations` history matches a file in `drizzle/`
+    (the fingerprint — runtime-verified that wrangler records the full
+    filename, `0000_volatile_thena.sql`). Tables with no recognised
+    history are still refused exactly as before. Day-2+ migrations on our
+    own DB therefore need no `--allow-non-empty` any more.
+  - `d1-setup.mjs` now CREATES the prefixed database when none exists and
+    wires the returned uuid into wrangler.jsonc itself (surgical,
+    comment-preserving replace; refuses if the `"database_id": "…"` shape
+    is ambiguous). It still never touches unprefixed DBs and never
+    auto-wires an existing prefixed one.
+  Both scripts gained `--self-test` modes (11/7 offline assertions) because
+  the sandbox has no Cloudflare credentials — the ownership and create/wire
+  logic is unit-tested without an account, and the placeholder/no-auth
+  paths were re-probed live. (The rename earlier the same day had already
+  moved the name to `you-ge-main` — commit `fdb3fd0`.)
 - **Owner instruction (2026-09-24): D1 renamed `you.ge-portfolio` →
   `you-ge-main`** (and the reserved prefix `you.ge` → `you-ge`, together —
   the name could never pass the old prefix check). Changed in ALL the
@@ -507,7 +531,9 @@ Runtime facts verified against installed better-auth 1.7.5 source:
 npx tsc --noEmit                 # expect: 0 errors
 rm -rf dist && npx vite build    # expect: success (rm first: empty-dist = false-clean leak check)
 npm run d1:safety                # expect: exit 1, BLOCKED on placeholder id
-                                 #         (exit 0 only after a real you-ge* id is pasted)
+                                 #         (exit 0 only after d1:setup wired a real id)
+node scripts/d1-safety-check.mjs --self-test   # 11/11 ownership-logic checks (offline)
+node scripts/d1-setup.mjs --self-test          # 7/7 create/wire checks (offline)
 # leak check — every line must say clean:
 for n in drizzle api.github.com BETTER_AUTH_SECRET sqlite_master D1Database; do
   printf '%-22s ' "$n"; grep -rqi "$n" dist/client/ && echo FOUND || echo clean
@@ -678,12 +704,13 @@ deployment work and two taste/policy calls. Round details preserved below.
    prefix + empty checks. The agent sandbox has **no Cloudflare credentials**
    — the owner runs the remote commands from README "First deploy" (chosen:
    runbook-only).
-2. `npm run d1:setup` (read-only listing) → owner runs
-   `npx wrangler d1 create you-ge-main` (prefix rule!) → pastes the uuid
-   into `wrangler.jsonc` `database_id`.
-3. `npm run d1:safety` must now **pass** (it only ever passed-exit-0 with a
-   real id + empty DB) → `npm run db:migrate:remote` (still chains the guard;
-   migrates via binding `DB`).
+2. `npm run d1:setup` — lists existing DBs (read-only) and, if no
+   `you-ge*` database exists, **creates `you-ge-main` and wires the uuid
+   into `wrangler.jsonc` itself** (owner instruction 2026-09-24; manual
+   equivalent: `npx wrangler d1 create you-ge-main` + paste).
+3. `npm run d1:safety` must now **pass** (real id + empty-or-ours target)
+   → `npm run db:migrate:remote` (still chains the guard; migrates via
+   binding `DB`; day-2+ re-runs pass on our migration history).
 4. `npx wrangler secret put BETTER_AUTH_SECRET` (`openssl rand -base64 32`),
    then in R2 `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET`, and optionally
    `GITHUB_TOKEN` (fine-grained, read-only repo) in R3.
@@ -1018,24 +1045,37 @@ Each was verified against the installed packages, not memory.
 
 1. `database_name` starts with the reserved prefix **`you-ge`** (owner rule;
    recommended concrete name `you-ge-main` — renamed by owner instruction
-   2026-09-24, was `you.ge`/`you.ge-portfolio`; the check structure is
-   unchanged), and
+   2026-09-24, was `you.ge`/`you.ge-portfolio`), and
 2. that name resolves to the configured `database_id`, and
-3. the target contains **no user tables** — and the `d1 execute --json` row
-   parse (`d1Rows`) is fail-closed: an unrecognised output envelope aborts
-   instead of passing "empty".
+3. the target is **provably ours** (owner instruction 2026-09-24 — "allow
+   writes, but only to databases created by this project"):
+   - **empty** (no user tables) — a fresh database, ours to initialise, or
+   - its `d1_migrations` history contains a name matching a file in
+     `drizzle/` — our own live database, day-2+ migrations allowed with no
+     flags.
+   A database with user tables but NO recognised migration history is
+   FOREIGN and refused — that refusal is unchanged since R1 and is the whole
+   point of this script. The `d1 execute --json` row parse (`d1Rows`) is
+   fail-closed: an unrecognised output envelope aborts instead of passing.
 
 Why it exists: `wrangler d1 migrations apply --remote` records applied migrations
 in the target's `d1_migrations` table. Point it at a database you already use and
 that table has no record of *our* migrations — so wrangler replays all of them
-against live data.
+against live data. (This is also why d1_migrations is the ownership
+fingerprint: only a database WE migrated carries our names in it.)
 
-Tested: placeholder id → exit 1; wrong db name → exit 1. Override flag
-(`--allow-non-empty`) exists and is intentionally ugly.
+Tested: placeholder id → exit 1; wrong db name → exit 1; ownership logic —
+11/11 via `node scripts/d1-safety-check.mjs --self-test` (offline, no
+account). Override flag (`--allow-non-empty`) exists and is intentionally
+ugly; day-2+ migrations on our own DB no longer need it.
 
-`scripts/d1-setup.mjs` is **read-only**: it lists the account's existing
-databases, marks them `DO NOT TOUCH`, and prints the `d1 create` command for a
-human to run. No script in this repo creates or migrates a database on its own.
+`scripts/d1-setup.mjs` lists the account's databases read-only (unprefixed
+ones marked `DO NOT TOUCH`) and, when no `you-ge*` database exists, **creates
+`you-ge-main` and wires the uuid into wrangler.jsonc itself** (owner
+instruction 2026-09-24 — previously it only printed the command). It never
+touches unprefixed databases, never auto-wires an existing prefixed one
+(existing ≠ provably ours), never migrates. Create/wire logic self-tested
+offline via `--self-test` (7/7).
 
 ---
 
