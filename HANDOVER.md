@@ -165,6 +165,35 @@ Requirements, verbatim from the user:
 - Safety tooling: `scripts/jsonc.mjs` (string-aware wrangler.jsonc parser —
   do not revert to regex `//` stripping, it ate `*/` cron + `/api/*`);
   `npm run d1:safety` exits 1 on placeholder id, zero remote calls.
+- **R4 completed (2026-09-23):** UX polish pass on the gated pages:
+  - **Designed 403 gate pages** (`src/server/gate-page.ts`): the Worker now
+    renders branded HTML (pending/restricted/suspended) instead of
+    `plainText` for member-gate, admin-gate and banned refusals. Copy kept
+    byte-identical (`not been granted`, `Administrator`) so
+    `role-matrix-smoke.sh` ran unchanged — 20/20. **banReason is
+    HTML-escaped** (stored admin text rendered into a page every banned
+    visitor loads); verified by banning a fixture with a `<script>` payload
+    and grepping the response: escaped text, zero raw tags. Gate pages carry
+    `noindex` + `cache-control: no-store` and inline CSS mirroring the
+    app tokens (the Worker can't know Vite's hashed asset URLs).
+  - **Retryable projects fetch:** `useEffect` now keys off a `reloadKey`
+    counter; the error notice gained "↻ Try again" / "Back to home" buttons
+    and the count badge is `role=status` + `aria-live=polite`. Skeleton and
+    empty states unchanged.
+  - **Card polish:** ↗ external-link affordance in the title, bottom-pinned
+    meta row (`Updated {relative time}` + "View on GitHub"), flex-`gap`
+    layout so the pinned row keeps breathing room, clamped descriptions kept.
+  - **`?next=` guard hardened + tested:** `sanitiseNext` moved from
+    `login.tsx` to leaf `src/lib/next.ts`; new `scripts/next-guard-test.mjs`
+    (`npm run test:next`) — 16 unit cases against the function (Node ≥22.18
+    type-strips the `.ts` import natively — no test runner added) + 6 HTTP
+    probes (hostile `/login?next=…` values render 200 with no off-origin
+    redirect; gated 302 preserves the encoded destination). 22/22.
+  - **What broke/surprised:** playwright's CDN is blocked from this sandbox,
+    so no headless-browser eyeball of the hydrated card grid (SSR shows the
+    skeleton by design — §4); recorded in §6 R4 status as the one open
+    visual check. `node scripts/next-guard-test.mjs` with a dev server down
+    exits 0 with the HTTP half SKIPped unless `--strict`.
 - **R3 local-only completed (2026-09-22):** GitHub sync now filters archived
   repos, upserts by stable GitHub id so renamed repos follow their row, and
   skips/logs renamed-slug conflicts instead of aborting the whole batch. It
@@ -182,8 +211,12 @@ Requirements, verbatim from the user:
   runbook: `d1 create you.ge-portfolio` → paste uuid → `d1:safety` →
   `db:migrate:remote` → secrets → `deploy`). No Google OAuth creds yet (R2);
   no real admin row yet (grant-admin needs the owner's first Google sign-in).
-- `?next=` post-login redirect untested end-to-end (needs real Google).
-- Error-boundary route, SEO/OG tags: not started.
+- `?next=` open-redirect guard now unit+HTTP tested (R4, 22/22), but the
+  **post-Google-login round-trip** is still untested end-to-end (needs real
+  Google creds, R2).
+- R4's one open visual check: real-browser eyeball of the hydrated
+  `/projects` card grid at 375px/1280px (no headless browser in this sandbox).
+- Error-boundary route, SEO/OG tags: not started (R6/R7).
 
 ---
 
@@ -290,6 +323,7 @@ npx vite dev &
 node scripts/seed-local-test-users.mjs > /tmp/seed.sql
 npx wrangler d1 execute DB --local --file /tmp/seed.sql   # only if fixtures missing
 bash scripts/role-matrix-smoke.sh          # expect: pass=20 fail=0
+npm run test:next                          # expect: pass=22 fail=0 (http half needs the dev server)
 ```
 
 > `better-auth` WILL appear in `dist/client/` — that's the legitimate client
@@ -328,6 +362,18 @@ Role matrix (`scripts/role-matrix-smoke.sh`, 20 checks, last run **20/20**):
 | `user` | **403** | **403** | 403 | 403 | 200 role=user |
 | `member` | **200** | **200** | 403 | 403 | 200 role=member |
 | `admin` | 200 | 200 | 200 | 200 | 200 role=admin |
+
+The **page** 403s render as branded HTML gate pages (`src/server/gate-page.ts`)
+since R4 — the script's body patterns (`not been granted`, `Administrator`)
+still match because the copy is unchanged. The gate-page copy and the API 403
+bodies in `guard.ts` must be changed together or neither. Ban reasons are
+HTML-escaped on the way in (verified: `<script>` payload renders as text).
+
+Open-redirect guard (`npm run test:next`, 22 checks, last run **22/22**):
+unit attack-table against `src/lib/next.ts` (absolute, protocol-relative,
+backslash, `javascript:`/`data:` payloads) + HTTP probes that `/login?next=…`
+renders 200 without an off-origin redirect and the gated 302 preserves the
+encoded same-origin destination.
 
 Fixture credentials (local D1 only, re-seed with the script above):
 `plainuser@test.local` / `memberuser@test.local` / `adminuser@test.local`,
@@ -453,6 +499,17 @@ curated flags survive sync, cron `*/6h` shows a scheduled entry in
 
 *Acceptance:* role matrix still 20/20 (or updated expectations), leak check
 clean, Lighthouse-ish eyeball on 375px + 1280px.
+
+*Status:* **done locally (2026-09-23)** — retryable fetch + skeleton + empty
+state, designed 403 gate pages, card polish (↗ affordance, "Updated …" meta
+row, clamped descriptions), `?next=` guard extracted to `src/lib/next.ts` and
+covered by `npm run test:next` (22/22). Copy strings kept byte-identical so
+the role matrix ran unchanged (20/20). What did NOT happen: a real-browser
+eyeball at 375/1280px — this sandbox cannot download a headless browser
+(playwright CDN blocked) and the card grid only renders client-side after
+hydration, so SSR HTML shows the skeleton only. Next agent with browser
+access (or the owner): eyeball `/projects` as a member at both widths. The
+`?next=` **post-Google-login** round-trip also still needs R2's real creds.
 
 ---
 
@@ -652,7 +709,8 @@ human to run. No script in this repo creates or migrates a database on its own.
 │   ├── grant-admin.mjs            role grant/revoke via wrangler d1 (§7.13)
 │   ├── jsonc.mjs                  string-aware wrangler.jsonc parser (§3)
 │   ├── seed-local-test-users.mjs  fixtures + --cookies (§5)
-│   └── role-matrix-smoke.sh       20-check E2E gate test (§5)
+│   ├── role-matrix-smoke.sh       20-check E2E gate test (§5)
+│   └── next-guard-test.mjs        ?next= open-redirect tests: 16 unit + 6 HTTP
 ├── drizzle/
 │   └── 0000_volatile_thena.sql    6 tables + indexes
 └── src/
@@ -672,6 +730,7 @@ human to run. No script in this repo creates or migrates a database on its own.
     │   ├── auth.ts                ⭐ createAuth(env) — admin({roles:siteRoles})
     │   ├── auth-client.ts         adminClient({roles}) + useAuthSession (§7.1)
     │   ├── internal-header.ts     leaf module, no deps (§4)
+    │   ├── next.ts                sanitiseNext — ?next= guard, leaf (R4)
     │   ├── session-fn.ts          createServerFn reading that header
     │   ├── types.ts               PublicProject/AdminRepo/SyncRun (client+server)
     │   └── use-api.ts             useApi + apiSend, no TanStack Query
@@ -680,6 +739,7 @@ human to run. No script in this repo creates or migrates a database on its own.
     │   ├── context.ts             createServices(env) — one per request
     │   ├── auth-routes.ts         ⭐ re-prefixes /api before auth.handler (§3)
     │   ├── guard.ts               requireSession, requireAdmin, requireMember
+    │   ├── gate-page.ts           branded 403 gate pages, escaped (R4)
     │   ├── repos-router.ts        /projects, /projects/by-slug (indexed reads)
     │   ├── admin-router.ts        /admin/repos, PATCH, /sync, /sync-log
     │   └── github-sync.ts         ⭐ cron sync, single multi-row upsert

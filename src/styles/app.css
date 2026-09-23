@@ -210,6 +210,63 @@ code {
 	text-decoration: none;
 }
 
+/* ── Project cards (routes/projects.tsx) ─────────────────────────────────── */
+.project-card {
+	display: flex;
+	flex-direction: column;
+	/* gap guarantees the meta row keeps breathing room even when its
+	   margin-top:auto resolves to 0 (shortest card in the row). */
+	gap: 0.8rem;
+	color: inherit;
+}
+.project-name {
+	margin: 0;
+	font-size: 1.05rem;
+	/* Keeps the ↗ glyph anchored to the last text line when the title wraps. */
+	display: inline;
+}
+.ext-arrow {
+	color: var(--text-dim);
+	font-size: 0.85em;
+	margin-left: 0.3rem;
+	transition: color 0.15s;
+}
+.project-card:hover .ext-arrow {
+	color: var(--accent-hover);
+}
+.project-desc {
+	color: var(--text-muted);
+	font-size: 0.92rem;
+	margin: 0;
+	/* Keep card heights even without hard truncation. */
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+.card-meta {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	flex-wrap: wrap;
+	margin-top: auto; /* pins to the card bottom regardless of description length */
+	padding-top: 0.9rem;
+	border-top: 1px solid var(--border);
+	color: var(--text-dim);
+	font-size: 0.8rem;
+}
+.card-meta > :empty {
+	display: none; /* no pushedAt → no orphan gap, no doubled separator feel */
+}
+.ext-hint {
+	color: var(--text-muted);
+	transition: color 0.15s;
+}
+.project-card:hover .ext-hint {
+	color: var(--accent-hover);
+}
+
 .grid {
 	display: grid;
 	gap: 1rem;

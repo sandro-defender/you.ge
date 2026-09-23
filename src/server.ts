@@ -37,6 +37,7 @@ import { createApp } from "./server/app";
 import { createAuth } from "./lib/auth";
 import { createDb } from "./lib/db";
 import { syncGithubRepos } from "./server/github-sync";
+import { gatePage } from "./server/gate-page";
 import { INTERNAL_SESSION_HEADER as SESSION_HEADER } from "./lib/internal-header";
 import { ADMIN_ROLES, PROJECT_ROLES, hasRole } from "./lib/roles";
 import type { Env } from "./lib/env";
@@ -97,23 +98,41 @@ export default {
 			}
 
 			if (session.user.banned) {
-				return plainText(
-					403,
-					session.user.banReason ?? "Your access to this site has been suspended.",
-				);
+				// banReason is stored admin-set text — gatePage HTML-escapes it.
+				return gatePage({
+					status: 403,
+					kind: "suspended",
+					title: "Access suspended",
+					message:
+						session.user.banReason ??
+						"Your access to this site has been suspended.",
+				});
 			}
 
 			// Explicit grant: signing in is not enough for /projects — an admin
 			// must have set role to "member" (or "admin") from /admin/users.
+			// COPY IS LOAD-BEARING: scripts/role-matrix-smoke.sh matches
+			// "not been granted" in this body, and the same string comes from
+			// requireMember for the API. Change both together or neither.
 			if (rule.requires === "member" && !hasRole(session.user.role, PROJECT_ROLES)) {
-				return plainText(
-					403,
-					"Your account has not been granted access yet. An administrator must approve it from the admin panel.",
-				);
+				return gatePage({
+					status: 403,
+					kind: "pending",
+					title: "Access pending",
+					message:
+						"Your account has not been granted access yet. An administrator must approve it from the admin panel.",
+					hint: "Already approved? Role changes can take up to five minutes to reach your session — check back shortly.",
+				});
 			}
 
 			if (rule.requires === "admin" && !hasRole(session.user.role, ADMIN_ROLES)) {
-				return plainText(403, "Administrator access required.");
+				return gatePage({
+					status: 403,
+					kind: "denied",
+					title: "Admin area",
+					message: "Administrator access required.",
+					hint: "This area is restricted to administrator accounts.",
+				});
 			}
 
 			// Start's handler is typed (request, options?) => Response and never
@@ -191,12 +210,5 @@ function withSessionHeader(
 		headers,
 		body: hasBody ? request.body : undefined,
 		redirect: "manual",
-	});
-}
-
-function plainText(status: number, message: string): Response {
-	return new Response(message, {
-		status,
-		headers: { "content-type": "text/plain; charset=utf-8" },
 	});
 }

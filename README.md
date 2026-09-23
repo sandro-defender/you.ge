@@ -44,6 +44,7 @@ Other everyday commands:
 | `npm run db:studio` | Drizzle Studio (local DB) |
 | `npm run auth:grant-admin` | Grant/revoke a role for a signed-in user (`node scripts/grant-admin.mjs you@example.com`) — **not** the better-auth CLI (see HANDOVER §7) |
 | `npm run auth:info` | Print better-auth runtime info |
+| `npm run test:next` | Open-redirect guard tests for `?next=` (16 unit cases + 6 HTTP probes; HTTP part needs the dev server, add `--strict` to require it) |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` from `wrangler.jsonc` |
 | `npm run deploy` | `vite build` + `wrangler deploy -c dist/server/wrangler.json` |
 | `npm run deploy:dry` | Same but `--dry-run` (no deploy) |
@@ -77,6 +78,14 @@ done
 > Known-and-accepted: the admin Repos page ships the literal strings
 > `GITHUB_USERNAME` / `GITHUB_TOKEN` as *UI hint text* for the empty state —
 > names, never values.
+
+With fixtures + the dev server up, also run the two behavioural suites (both
+local-only):
+
+| Script | What it asserts |
+|---|---|
+| `bash scripts/role-matrix-smoke.sh` | 20 checks: page+API for no-session/user/member/admin + the forged-header probe. The page 403s are the designed gate pages (`src/server/gate-page.ts`) — **the copy is load-bearing**, the script matches on `not been granted` / `Administrator` |
+| `npm run test:next` | 22 checks: the `?next=` open-redirect guard — unit attack-table against `src/lib/next.ts` + HTTP probes that `/login?next=…` never redirects off-origin and the gate 302 preserves the encoded destination |
 
 ---
 
@@ -136,6 +145,9 @@ The same `siteRoles` map is passed to `admin({ roles })` (server — validates
 setRole submissions, drives `hasPermission`) and `adminClient({ roles })`
 (client — widens `setRole` types to include `member`). Verify with
 `scripts/role-matrix-smoke.sh` (20 checks: no-session, user, member, admin).
+Page refusals render the branded gate pages from `src/server/gate-page.ts`
+(pending / restricted / suspended) with the exact same copy as the API 403
+bodies — change them together or neither.
 
 Admin bootstrap: sign in with Google once (creates the `user` row), then
 `node scripts/grant-admin.mjs you@example.com` — a `user.role` UPDATE through
@@ -350,6 +362,7 @@ Each was verified against the installed packages. **Do not “fix” these.**
 │   ├── grant-admin.mjs         role grant/revoke via wrangler d1 (admin bootstrap)
 │   ├── seed-local-test-users.mjs  local fixtures + --cookies
 │   ├── role-matrix-smoke.sh    20-check E2E gate test
+│   ├── next-guard-test.mjs     ?next= open-redirect guard tests (unit + HTTP)
 │   └── jsonc.mjs               string-aware wrangler.jsonc parser (shared)
 ├── drizzle/                    migrations (drizzle-kit output)
 └── src/
@@ -365,6 +378,7 @@ Each was verified against the installed packages. **Do not “fix” these.**
     │   ├── auth.ts             createAuth(env) factory — per request
     │   ├── auth-client.ts      browser client + useAuthSession() (fact #1)
     │   ├── internal-header.ts  leaf module, no deps
+    │   ├── next.ts             sanitiseNext — ?next= open-redirect guard (leaf)
     │   ├── session-fn.ts       createServerFn reading the internal header
     │   ├── types.ts            PublicProject/AdminRepo/SyncRun (client+server)
     │   └── use-api.ts          useApi + apiSend, no TanStack Query
@@ -373,6 +387,7 @@ Each was verified against the installed packages. **Do not “fix” these.**
     │   ├── context.ts          createServices(env) — one per request
     │   ├── auth-routes.ts      sub.all("/*") → auth.handler(raw)
     │   ├── guard.ts            requireSession, requireAdmin
+    │   ├── gate-page.ts        branded 403 gate pages (Worker-rendered, escaped)
     │   ├── repos-router.ts     /projects, /projects/by-slug (indexed reads)
     │   ├── admin-router.ts     /admin/repos CRUD + /sync + /sync-log
     │   └── github-sync.ts      ⭐ cron sync, single multi-row upsert
