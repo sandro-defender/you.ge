@@ -189,10 +189,15 @@ Requirements, verbatim from the user:
     type-strips the `.ts` import natively — no test runner added) + 6 HTTP
     probes (hostile `/login?next=…` values render 200 with no off-origin
     redirect; gated 302 preserves the encoded destination). 22/22.
-  - **What broke/surprised:** playwright's CDN is blocked from this sandbox,
-    so no headless-browser eyeball of the hydrated card grid (SSR shows the
-    skeleton by design — §4); recorded in §6 R4 status as the one open
-    visual check. `node scripts/next-guard-test.mjs` with a dev server down
+  - **What broke/surprised:** playwright's CDN and storage.googleapis.com are
+    blocked from this sandbox, so the first browser attempt failed — solved
+    same day with `@sparticuz/chromium` (npm registry ships the binary; see
+    §6 R4 status for the recipe). Screenshots at 375/1280px pixel-verified
+    the grid, equal card bottoms, and gate pages. Also learned the hard way:
+    **the sandbox can reset between agent turns** — node_modules, .wrangler
+    (local D1) and .dev.vars were wiped mid-session; rebuild with `npm ci` →
+    recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
+    suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
 - **R3 local-only completed (2026-09-22):** GitHub sync now filters archived
   repos, upserts by stable GitHub id so renamed repos follow their row, and
@@ -214,8 +219,6 @@ Requirements, verbatim from the user:
 - `?next=` open-redirect guard now unit+HTTP tested (R4, 22/22), but the
   **post-Google-login round-trip** is still untested end-to-end (needs real
   Google creds, R2).
-- R4's one open visual check: real-browser eyeball of the hydrated
-  `/projects` card grid at 375px/1280px (no headless browser in this sandbox).
 - Error-boundary route, SEO/OG tags: not started (R6/R7).
 
 ---
@@ -308,6 +311,14 @@ Runtime facts verified against installed better-auth 1.7.5 source:
    signatures with WebCrypto or the seed script's own signer.
 
 ## 5. Verification — re-run after every change
+
+> **Sandbox-reset note:** a new agent turn can start with `node_modules/`,
+> `.wrangler/` (local D1) and `.dev.vars` wiped (snapshot-excluded paths).
+> Before running anything below: `npm ci` → recreate `.dev.vars` from
+> `.dev.vars.example` (fresh `BETTER_AUTH_SECRET`) → `npm run
+> db:migrate:local` → re-seed fixtures. `git` may also be behind the pushed
+> session branch — `git fetch origin <branch> && git reset --hard FETCH_HEAD`
+> recovers the commit without losing anything.
 
 ```bash
 npx tsc --noEmit                 # expect: 0 errors
@@ -500,16 +511,21 @@ curated flags survive sync, cron `*/6h` shows a scheduled entry in
 *Acceptance:* role matrix still 20/20 (or updated expectations), leak check
 clean, Lighthouse-ish eyeball on 375px + 1280px.
 
-*Status:* **done locally (2026-09-23)** — retryable fetch + skeleton + empty
-state, designed 403 gate pages, card polish (↗ affordance, "Updated …" meta
-row, clamped descriptions), `?next=` guard extracted to `src/lib/next.ts` and
-covered by `npm run test:next` (22/22). Copy strings kept byte-identical so
-the role matrix ran unchanged (20/20). What did NOT happen: a real-browser
-eyeball at 375/1280px — this sandbox cannot download a headless browser
-(playwright CDN blocked) and the card grid only renders client-side after
-hydration, so SSR HTML shows the skeleton only. Next agent with browser
-access (or the owner): eyeball `/projects` as a member at both widths. The
-`?next=` **post-Google-login** round-trip also still needs R2's real creds.
+*Status:* **done (2026-09-23, visual check closed same day)** — retryable
+fetch + skeleton + empty state, designed 403 gate pages, card polish (↗
+affordance, "Updated …" meta row, clamped descriptions), `?next=` guard
+extracted to `src/lib/next.ts` and covered by `npm run test:next` (22/22).
+Copy strings kept byte-identical so the role matrix ran unchanged (20/20).
+The 375/1280px eyeball initially looked impossible (playwright CDN and
+storage.googleapis.com are network-blocked in the sandbox) but was completed
+via the **`@sparticuz/chromium` npm package** — it ships the browser binary
+inside the npm tarball (extract `bin/al2023.tar.br` libs +
+`bin/fonts.tar.br`, set `LD_LIBRARY_PATH`/`FONTCONFIG_PATH`, launch with
+playwright-core's `executablePath`). Pixel-verified from the screenshots:
+1 column at 375px, 3 equal columns at 1280px (centered, 16px gutters), all
+cards in a row share one bottom edge (grid stretch + `margin-top: auto`
+meta pinning), theme colours and correct `<title>`s on every page. The
+`?next=` **post-Google-login** round-trip still needs R2's real creds.
 
 ---
 
