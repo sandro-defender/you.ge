@@ -229,6 +229,20 @@ Requirements, verbatim from the user:
     node_modules: auth/better-auth 1.7.5, hono 4.13.8, react-router
     1.170.38, react-start 1.168.57; fact #12 proven empirically; #2/#3/
     #10/#11/#14 re-grepped). None rotted.
+  - **Cold-start acceptance PROVEN (2026-09-24, post-close):** the sandbox
+    was fully rebuilt between turns — /home/user/you.ge came back as a
+    fresh clone at the session BASE commit with the final file state
+    overlaid as uncommitted changes, and node_modules/.dev.vars/.wrangler
+    all gone. Recovery used ONLY the documented commands (Quick start +
+    runbook clean-clone): `git fetch origin <branch> && git reset --hard
+    FETCH_HEAD` (GitHub holds the truth — the restored working tree
+    matched the pushed commit 1b79844 exactly, 0 diff) → `npm ci` →
+    `.dev.vars` from example with the documented secret generator →
+    `db:migrate:local` → seed fixtures → `npx vite dev`. Everything green
+    first try: smoke table, matrix 40/40, next-guard 22/22, typecheck 0,
+    build + leak check clean, d1:safety exit 1. If a future agent sees
+    "my commits vanished" after a reset: they are on GitHub — fetch +
+    reset, never re-do the work.
 - **R7 completed (2026-09-24):** SEO / meta / share cards:
   - **Indexability model:** root `head()` keeps a fail-closed
     `robots: noindex, nofollow` DEFAULT; `/` overrides to `index, follow`
