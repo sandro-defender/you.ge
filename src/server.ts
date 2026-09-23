@@ -37,12 +37,54 @@ import { createApp } from "./server/app";
 import { createAuth } from "./lib/auth";
 import { createDb } from "./lib/db";
 import { syncGithubRepos } from "./server/github-sync";
-import { gatePage } from "./server/gate-page";
+import { gatePage, serverErrorPage } from "./server/gate-page";
 import { INTERNAL_SESSION_HEADER as SESSION_HEADER } from "./lib/internal-header";
 import { ADMIN_ROLES, PROJECT_ROLES, hasRole } from "./lib/roles";
 import type { Env } from "./lib/env";
 
 const app = createApp();
+
+/**
+ * SECURITY HEADERS FOR PAGES (R6 finding).
+ *
+ * Hono's `secureHeaders()` (src/server/app.ts) covers ONLY /api/* — pages are
+ * rendered by `startHandler` here and never pass through Hono, so without
+ * this helper the HTML documents (the clickjacking/Sniffing surface that
+ * matters most) shipped with no x-frame-options, no nosniff, nothing.
+ *
+ * The set mirrors hono's secureHeaders DEFAULTS exactly (verified against
+ * node_modules/hono/dist/middleware/secure-headers/secure-headers.js):
+ * COEP deliberately OFF, the eleven below ON. If you customise secureHeaders
+ * in app.ts, mirror the change here — drift between the two halves is
+ * invisible to any test that only curls the API.
+ */
+const PAGE_SECURITY_HEADERS: Readonly<Record<string, string>> = {
+	"cross-origin-resource-policy": "same-origin",
+	"cross-origin-opener-policy": "same-origin",
+	"origin-agent-cluster": "?1",
+	"referrer-policy": "no-referrer",
+	"strict-transport-security": "max-age=15552000; includeSubDomains",
+	"x-content-type-options": "nosniff",
+	"x-dns-prefetch-control": "off",
+	"x-download-options": "noopen",
+	"x-frame-options": "SAMEORIGIN",
+	"x-permitted-cross-domain-policies": "none",
+	"x-xss-protection": "0",
+};
+
+/** Copy a Response with the page security headers applied. */
+function withSecurityHeaders(res: Response): Response {
+	const headers = new Headers(res.headers);
+	for (const [name, value] of Object.entries(PAGE_SECURITY_HEADERS)) {
+		if (!headers.has(name)) headers.set(name, value);
+	}
+	// res.body may be a live SSR stream — pass it through untouched.
+	return new Response(res.body, {
+		status: res.status,
+		statusText: res.statusText,
+		headers,
+	});
+}
 
 /**
  * Which paths require what. Longest prefix wins.
@@ -94,7 +136,9 @@ export default {
 			if (!session) {
 				// Preserve the intended destination so login can return to it.
 				const next = encodeURIComponent(pathname + url.search);
-				return Response.redirect(`${url.origin}/login?next=${next}`, 302);
+				return withSecurityHeaders(
+					Response.redirect(`${url.origin}/login?next=${next}`, 302),
+				);
 			}
 
 			if (session.user.banned) {
@@ -138,13 +182,27 @@ export default {
 			// Start's handler is typed (request, options?) => Response and never
 			// receives env — which is precisely why the permission check above has
 			// to live here in the Worker entry rather than inside a route loader.
-			return startHandler.fetch(withSessionHeader(cleanRequest, session));
+			// Errors escaping Start's own error handling land in the catch below:
+			// the user gets a branded 500 with no stack, the log gets the truth.
+			try {
+				return withSecurityHeaders(
+					await startHandler.fetch(withSessionHeader(cleanRequest, session)),
+				);
+			} catch (err) {
+				console.error("[ssr] gated render failed:", err);
+				return serverErrorPage();
+			}
 		}
 
 		// ── 3. Public pages → render ────────────────────────────────────────
 		// Static assets (CSS, JS, images) are served by the platform from
 		// `assets.directory` and never reach this code at all.
-		return startHandler.fetch(cleanRequest);
+		try {
+			return withSecurityHeaders(await startHandler.fetch(cleanRequest));
+		} catch (err) {
+			console.error("[ssr] public render failed:", err);
+			return serverErrorPage();
+		}
 	},
 
 	/**

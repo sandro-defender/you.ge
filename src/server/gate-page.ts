@@ -73,7 +73,7 @@ text-decoration:none;transition:background .15s,border-color .15s}
 @media (prefers-reduced-motion:reduce){*{transition-duration:.01ms!important}}`;
 
 /** Visual severity of the gate — drives the badge colour and label. */
-export type GateKind = "pending" | "denied" | "suspended";
+export type GateKind = "pending" | "denied" | "suspended" | "error";
 
 /**
  * Render a gate page. `message` is escaped; pass it exactly as it should read.
@@ -89,7 +89,13 @@ export function gatePage(options: {
 	const { status, kind, title, message, hint } = options;
 
 	const badgeLabel =
-		kind === "pending" ? "Access pending" : kind === "suspended" ? "Suspended" : "Restricted";
+		kind === "pending"
+			? "Access pending"
+			: kind === "suspended"
+				? "Suspended"
+				: kind === "error"
+					? "Server error"
+					: "Restricted";
 
 	const html = `<!DOCTYPE html>
 <html lang="en">
@@ -123,6 +129,40 @@ ${hint ? `<p class="hint">${escapeHtml(hint)}</p>\n` : ""}<div class="actions">
 		headers: {
 			"content-type": "text/html; charset=utf-8",
 			"cache-control": "no-store",
+			// Same security-header set the Worker entry applies to page renders
+			// (see PAGE_SECURITY_HEADERS in src/server.ts). Duplicated here
+			// because gate pages are built without going through either Hono's
+			// secureHeaders or the startHandler wrapper.
+			"cross-origin-resource-policy": "same-origin",
+			"cross-origin-opener-policy": "same-origin",
+			"origin-agent-cluster": "?1",
+			"referrer-policy": "no-referrer",
+			"strict-transport-security": "max-age=15552000; includeSubDomains",
+			"x-content-type-options": "nosniff",
+			"x-dns-prefetch-control": "off",
+			"x-download-options": "noopen",
+			"x-frame-options": "SAMEORIGIN",
+			"x-permitted-cross-domain-policies": "none",
+			"x-xss-protection": "0",
 		},
+	});
+}
+
+/**
+ * Branded 500 for anything that escapes TanStack Start's own error handling
+ * (R6): the Worker entry wraps `startHandler.fetch` in try/catch and falls
+ * back to this. SECURITY: the error's message and stack are deliberately NOT
+ * interpolated — SSR exceptions can carry file paths, SQL fragments or env
+ * values, and a 500 body is world-readable. The details go to `console.error`
+ * (wrangler tail / observability), the user gets an apology.
+ */
+export function serverErrorPage(): Response {
+	return gatePage({
+		status: 500,
+		kind: "error",
+		title: "Something went wrong",
+		message:
+			"An unexpected error occurred while rendering this page. It has been logged — try again in a moment.",
+		hint: "If the problem persists, the site owner can find details in the Worker logs (wrangler tail).",
 	});
 }

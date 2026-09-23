@@ -199,6 +199,41 @@ Requirements, verbatim from the user:
     recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
     suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
+- **R6 completed (2026-09-24):** Security review + error handling:
+  - **Matrix 20→40** (`scripts/role-matrix-smoke.sh`): 10 unit `hasRole`
+    checks + 30 HTTP. New rows: expired session (302/401 + get-session
+    `null`), banned valid-session (403 + suspended copy everywhere),
+    garbage-role valid-session (403 + not-granted copy), member→
+    `GET /api/auth/admin/list-users` → 403. Script fixes along the way:
+    a missing `)` in the `node -e` prelude zeroed the whole unit block
+    (both closing parens of `].map(t).join(' '));` are required), and
+    list-users is **GET** in better-auth 1.7.5 (POST 404s). Seed script
+    gained expired/banned/garbage fixtures + self-heal UPDATEs (6 total,
+    `--cookies` prints Cookie headers).
+  - **Loader error-message leak found and fixed:** probing the 500 path
+    with a canary throw revealed that a failed loader's message is
+    serialised into the dehydrated router state (`new Error(<message>)`
+    in a `<script>` of the 500 body) — **in the production build**, with
+    no errorSerializer hook available (fact #15). A Drizzle/D1 error
+    would have shipped its SQL. Fix: `src/lib/safe-loader.ts` wraps both
+    route loaders — logs the real error server-side, re-throws generic
+    Error, re-throws redirect/notFound untouched. Verified against a
+    built preview: canary absent, generic message present, status 500,
+    branded RootError, real error visible only in server logs.
+  - **Page security headers were MISSING:** pages render through
+    `startHandler` and never touch Hono, so `secureHeaders()` only
+    covered `/api/*` — the HTML shipped with zero security headers. Fix:
+    `PAGE_SECURITY_HEADERS` + `withSecurityHeaders()` in `server.ts`
+    (login 302 + both startHandler returns) and the same 11 inline in
+    `gate-page.ts`; verified by curl on `/` and a 403 gate page (fact #16).
+  - **Error handling layers (all verified rendering):** `__root.tsx`
+    errorComponent (RootError, branded, no `error.message`), Worker
+    try/catch → `serverErrorPage()` (500, no-store + 11 headers, hint →
+    `wrangler tail`), `/api/health` no-store. Static assets
+    (`dist/client/assets/*`) get immutable caching from hashed filenames.
+  - **Rate limiting: NOT built** — Workers Free has none; owner decision
+    pending (accept documented risk vs tiny D1 counter on sign-in
+    failures).
 - **R5 completed (2026-09-23):** Admin UX — users + repos workflows:
   - **Last-admin guard (SERVER-side):** verified against installed
     better-auth 1.7.5 (`routes.mjs`): setRole has NO last-admin protection
@@ -377,7 +412,7 @@ done
 npx vite dev &
 node scripts/seed-local-test-users.mjs > /tmp/seed.sql
 npx wrangler d1 execute DB --local --file /tmp/seed.sql   # only if fixtures missing
-bash scripts/role-matrix-smoke.sh          # expect: pass=20 fail=0
+bash scripts/role-matrix-smoke.sh          # expect: pass=40 fail=0
 npm run test:next                          # expect: pass=22 fail=0 (http half needs the dev server)
 ```
 
@@ -409,7 +444,7 @@ Baseline smoke (no cookies) — all green as of last run:
 | `GET /api/projects`, `/api/admin/repos` | 401 |
 | any of the above **+ forged `x-youge-session`** | still 302/401 |
 
-Role matrix (`scripts/role-matrix-smoke.sh`, 20 checks, last run **20/20**):
+Role matrix (`scripts/role-matrix-smoke.sh`, 40 checks = 10 unit + 30 HTTP, last run **40/40**):
 
 | Role | `/projects` | `/api/projects` | `/admin` | `/api/admin/repos` | get-session |
 |---|---|---|---|---|---|
@@ -417,6 +452,18 @@ Role matrix (`scripts/role-matrix-smoke.sh`, 20 checks, last run **20/20**):
 | `user` | **403** | **403** | 403 | 403 | 200 role=user |
 | `member` | **200** | **200** | 403 | 403 | 200 role=member |
 | `admin` | 200 | 200 | 200 | 200 | 200 role=admin |
+| `expired` session | 302 | 401 | 302 | 401 | 200 `null` |
+| `banned` (valid session) | 403 + suspended copy | 403 | 403 | 403 | 403 |
+| `garbage` role (valid session) | 403 + not-granted copy | 403 | 403 | 403 | 200 role=garbage |
+
+The 10 unit checks assert `hasRole` semantics directly (null/empty/whitespace
+→ false, comma-split ANY-match, case-sensitivity, `admin,garbage` → both
+role sets, `admin` implies PROJECT_ROLES); the HTTP half also covers
+member→`GET /api/auth/admin/list-users` → 403 (**GET**, not POST — the route
+is GET in better-auth 1.7.5) and the forged-header probe on every role row.
+Fixtures: `node scripts/seed-local-test-users.mjs` (6 users: user, member,
+admin, expired, banned, garbage; `--cookies` prints ready-made Cookie
+headers) — re-seed after any ban/role E2E or the matrix fails loudly.
 
 The **page** 403s render as branded HTML gate pages (`src/server/gate-page.ts`)
 since R4 — the script's body patterns (`not been granted`, `Administrator`)
@@ -429,6 +476,22 @@ unit attack-table against `src/lib/next.ts` (absolute, protocol-relative,
 backslash, `javascript:`/`data:` payloads) + HTTP probes that `/login?next=…`
 renders 200 without an off-origin redirect and the gated 302 preserves the
 encoded same-origin destination.
+
+Security headers (R6, verified with curl on dev + built preview):
+
+| Response | Headers |
+|---|---|
+| `/api/*` (Hono `secureHeaders()`) | 11 defaults: CORP same-origin, COOP same-origin, Origin-Agent-Cluster `?1`, Referrer-Policy no-referrer, STS `max-age=15552000; includeSubDomains`, XCTO nosniff, X-DNS-Prefetch-Control off, X-Download-Options noopen, XFO SAMEORIGIN, X-Permitted-Cross-Domain-Policies none, X-XSS-Protection 0 (COEP off — hono default) |
+| pages + 302s + gate pages (`server.ts` `withSecurityHeaders()`) | the same 11, mirrored in `PAGE_SECURITY_HEADERS` (fact #16) |
+| `/api/health`, all gate/error pages | `Cache-Control: no-store` |
+| `dist/client/assets/*` (hashed filenames) | served by the TanStack Start static-assets plugin — long-lived immutable caching comes free from the hashed names; nothing to configure |
+
+500-path probe (R6, run against a **built** preview — dev shows an error
+overlay by design): throw a canary `new Error("secret …")` in a loader →
+status 500, branded RootError HTML, **canary absent from the body**, only
+`new Error("This page failed to load. The details are in the server logs.")`
+serialised, real error visible via `wrangler tail` (fact #15). Remove the
+probe before committing.
 
 Fixture credentials (local D1 only, re-seed with the script above):
 `plainuser@test.local` / `memberuser@test.local` / `adminuser@test.local`,
@@ -600,24 +663,31 @@ Last-admin guard is server-side (databaseHooks — the only hook surface
 
 ---
 
-### R6 — Security review + error handling  ·  ~60%
+### R6 — Security review + error handling  ·  ~95% (owner: rate-limit call)
 
 *Touches:* `server.ts`, `guard.ts`, `app.ts`, new `routes/error.tsx` or
 `__root.tsx` errorComponent, headers config.
 
-1. Re-read §4 forgery guard; add matrix rows for: expired session cookie,
-   banned user (403 + reason), `role` containing garbage (`hasRole` fail-closed
-   — unit-check `roles.ts` with node -e), `/api/auth/admin/*` as member (403).
-2. Error boundary: Start's `errorComponent` — SSR errors currently fall to
-   Worker 500; ship a minimal branded 500 that does not leak stack traces.
-3. Headers: confirm `secureHeaders` on Hono + correct cache-control on
-   `/api/health` (no-store) vs static assets (immutable).
-4. Rate limiting reality-check: Workers Free has none built-in — document
-   "no rate limit on /api/auth" as accepted risk or add a tiny D1 counter
-   only for sign-in failures (owner decision — ask).
+1. ✅ Matrix grown to 40 checks (10 unit `hasRole` + 30 HTTP): expired,
+   banned (403 + suspended copy), garbage role (403 + not-granted copy),
+   member→`GET /api/auth/admin/list-users` 403, forged-header probes on
+   every row. 6 seed fixtures incl. `expired`/`banned`/`garbage`.
+2. ✅ Error boundary: `__root.tsx` errorComponent (RootError — branded, no
+   `error.message`), Worker-level try/catch → `serverErrorPage()` (500,
+   no-store + 11 headers, hint → `wrangler tail`), and `safeLoader()`
+   on every route loader (fact #15 — closes the dehydrated-state message
+   leak that errorComponent alone cannot). Verified with a canary throw
+   against a built preview: 500 + branded page + canary absent.
+3. ✅ Headers: `secureHeaders` on Hono `/api/*` **and** page responses via
+   `server.ts` `withSecurityHeaders()` (pages bypass Hono — fact #16);
+   `/api/health` + gate/error pages no-store; static assets
+   `dist/client/assets/*` get immutable caching from hashed filenames.
+4. ⏳ Rate limiting: Workers Free has none built-in — owner decision
+   (accept documented risk vs tiny D1 counter on sign-in failures). ASKED,
+   awaiting answer.
 
-*Acceptance:* matrix grows to cover banned/expired (update the script's
-expect table), leak check clean, no stack traces in any 500 body.
+*Acceptance:* ✅ matrix covers banned/expired (40/40), leak check clean,
+no stack traces in any 500 body (verified against the production build).
 
 ---
 
@@ -726,6 +796,36 @@ Each was verified against the installed packages, not memory.
     process. Use `scripts/grant-admin.mjs` (wrangler-backed `user.role`
     UPDATE — what setRole does under the hood, §4b).
 
+14. **`@better-auth/core/env` must never reach the client bundle.** The env
+    module contains secret-name accessors; the one leak this repo had came
+    from a `typeof import("./auth")` probe. The fix is the client-only stub
+    wired in `vite.config.ts` (`src/build/better-auth-core-env-client-stub.ts`
+    via a `resolveId` plugin — per-environment aliases do not exist in Vite).
+    The §5 leak check exists to catch regressions.
+
+15. **A failed route loader serialises its error MESSAGE into the 500 body —
+    even in production.** TanStack Router/Start (verified 1.170/1.168)
+    dehydrates the errored match via seroval's `ShallowErrorPlugin`
+    (`router-core/dist/esm/ssr/serializer/ShallowErrorPlugin.js`), emitting
+    `new Error(<message>)` in a `<script>` of the streamed response, and
+    there is **no errorSerializer hook** in this version. Probe: a loader
+    throwing `new Error("secret-token /path/to/secret.sql")` shipped exactly
+    that string in the production build's 500 — a Drizzle/D1 error would
+    ship its SQL. Fix: `src/lib/safe-loader.ts` — wrap EVERY route loader in
+    `safeLoader()`; it logs the real error server-side and re-throws a
+    generic Error (redirect/notFound control flow re-thrown untouched).
+    The errorComponent/Worker-catch layers never render error.message, so
+    nothing user-facing is lost.
+
+16. **Hono's `secureHeaders()` only covers `/api/*`.** Pages are rendered by
+    `startHandler` in `src/server.ts` and never pass through Hono, so the
+    HTML documents — the clickjacking/sniffing surface that matters most —
+    shipped with NO security headers until R6 added
+    `PAGE_SECURITY_HEADERS` + `withSecurityHeaders()` there (mirroring
+    hono's defaults exactly; gate pages carry the same set inline). If you
+    customise `secureHeaders` in `app.ts`, mirror the change in
+    `server.ts` — drift between the halves is invisible to API-only curls.
+
 ---
 
 ## 8. D1 safety — non-negotiable
@@ -799,6 +899,7 @@ human to run. No script in this repo creates or migrates a database on its own.
     │   ├── internal-header.ts     leaf module, no deps (§4)
     │   ├── next.ts                sanitiseNext — ?next= guard, leaf (R4)
     │   ├── session-fn.ts          createServerFn reading that header
+    │   ├── safe-loader.ts       sanitising loader wrapper — no error leakage (R6)
     │   ├── types.ts               PublicProject/AdminRepo/SyncRun (client+server)
     │   └── use-api.ts             useApi + apiSend, no TanStack Query
     ├── server/

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { getServerSession, type SessionUser } from "../lib/session-fn";
+import { safeLoader } from "../lib/safe-loader";
 import type { PublicProject } from "../lib/types";
 
 /**
@@ -29,9 +30,9 @@ export const Route = createFileRoute("/projects")({
 	head: () => ({
 		meta: [{ title: "Projects — you.ge" }],
 	}),
-	loader: async () => ({
+	loader: safeLoader(async () => ({
 		session: await getServerSession(),
-	}),
+	})),
 	component: Projects,
 });
 

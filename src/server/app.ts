@@ -55,8 +55,15 @@ export function createApp() {
 	app.use("*", secureHeaders());
 
 	// ── Public ──────────────────────────────────────────────────────────────
+	// no-store: the body carries a timestamp — any shared cache would serve a
+	// stale "ok" during an outage, which is exactly what a health check must
+	// never do. (R6: the rest of the API responses are session-scoped JSON and
+	// already skip cacheable status codes; Hono does not add cache-control by
+	// default, and the Worker never sets CDN caching on /api/.)
 	app.get("/health", (c) =>
-		c.json({ ok: true, ts: new Date().toISOString() }),
+		c.json({ ok: true, ts: new Date().toISOString() }, 200, {
+			"cache-control": "no-store",
+		}),
 	);
 
 	// ── better-auth: sign-in, Google callback, sessions, and every

@@ -84,7 +84,7 @@ local-only):
 
 | Script | What it asserts |
 |---|---|
-| `bash scripts/role-matrix-smoke.sh` | 20 checks: page+API for no-session/user/member/admin + the forged-header probe. The page 403s are the designed gate pages (`src/server/gate-page.ts`) — **the copy is load-bearing**, the script matches on `not been granted` / `Administrator` |
+| `bash scripts/role-matrix-smoke.sh` | 40 checks (10 unit + 30 HTTP): `hasRole` unit attack-table + page/API rows for no-session/user/member/admin/expired/banned/garbage-role, member→`/api/auth/admin/list-users` 403, forged-header probes. The page 403s are the designed gate pages (`src/server/gate-page.ts`) — **the copy is load-bearing**, the script matches on `not been granted` / `Administrator` |
 | `npm run test:next` | 22 checks: the `?next=` open-redirect guard — unit attack-table against `src/lib/next.ts` + HTTP probes that `/login?next=…` never redirects off-origin and the gate 302 preserves the encoded destination |
 
 ---
@@ -144,7 +144,8 @@ Enforced in **two places that must agree**: `ACCESS_POLICY` in `src/server.ts`
 The same `siteRoles` map is passed to `admin({ roles })` (server — validates
 setRole submissions, drives `hasPermission`) and `adminClient({ roles })`
 (client — widens `setRole` types to include `member`). Verify with
-`scripts/role-matrix-smoke.sh` (20 checks: no-session, user, member, admin).
+`scripts/role-matrix-smoke.sh` (40 checks: no-session, user, member, admin,
+expired, banned, garbage role).
 Page refusals render the branded gate pages from `src/server/gate-page.ts`
 (pending / restricted / suspended) with the exact same copy as the API 403
 bodies — change them together or neither.
@@ -162,6 +163,27 @@ Admin bootstrap: sign in with Google once (creates the `user` row), then
 `wrangler d1 execute`, exactly what better-auth's own `setRole` does under the
 hood. The better-auth CLI's `create-admin` **cannot** work against this
 factory-based D1 config (HANDOVER §7).
+
+### Security & error handling (R6)
+
+- **Security headers everywhere:** `/api/*` gets Hono's `secureHeaders()`
+  (11 defaults, COEP off). Pages, the login 302 and the gate pages are
+  rendered by the Worker and never touch Hono — they carry the same 11
+  headers via `PAGE_SECURITY_HEADERS` in `src/server.ts` / `gate-page.ts`.
+- **Errors never leak:** every route loader is wrapped in `safeLoader()`
+  (`src/lib/safe-loader.ts`) — the real error goes to `console.error`
+  (see it with `wrangler tail`), the browser only ever gets a generic
+  message. This matters because TanStack Start serialises a failed
+  loader's error message into the dehydrated router state of the 500
+  body — without the wrapper, a D1/Drizzle error would ship its SQL.
+  On top of that: `__root.tsx` renders a branded errorComponent (no
+  `error.message` anywhere) and the Worker catch-all renders
+  `serverErrorPage()` (500, `no-store` + the same 11 headers).
+- **No caching of anything auth-adjacent:** `/api/health`, gate and error
+  pages send `no-store`. Static assets under `/assets/` have hashed
+  filenames, so long-lived caching is free and safe.
+- **Known, accepted gap (owner call pending):** no rate limiting on
+  `/api/auth/*` — Workers Free has none built-in.
 
 ---
 
@@ -388,6 +410,7 @@ Each was verified against the installed packages. **Do not “fix” these.**
     │   ├── internal-header.ts  leaf module, no deps
     │   ├── next.ts             sanitiseNext — ?next= open-redirect guard (leaf)
     │   ├── session-fn.ts       createServerFn reading the internal header
+    │   ├── safe-loader.ts       sanitising loader wrapper — no error leakage
     │   ├── types.ts            PublicProject/AdminRepo/SyncRun (client+server)
     │   └── use-api.ts          useApi + apiSend, no TanStack Query
     ├── server/

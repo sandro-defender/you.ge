@@ -50,6 +50,15 @@ export const Route = createRootRoute({
 		links: [{ rel: "stylesheet", href: appStyles }],
 	}),
 	component: RootComponent,
+	/**
+	 * Error boundary for route-level failures (loader/render throws), on the
+	 * server AND after hydration. SECURITY: never render `error.message` or a
+	 * stack — SSR exceptions can carry file paths, SQL fragments or env values,
+	 * and this page is world-readable. The server logs the details; the user
+	 * gets an apology and a way out. Anything that escapes even this lands in
+	 * the Worker entry's try/catch → serverErrorPage() (src/server/gate-page).
+	 */
+	errorComponent: RootError,
 });
 
 function RootComponent() {
@@ -62,6 +71,45 @@ function RootComponent() {
 				<Nav />
 				<main className="shell">
 					<Outlet />
+				</main>
+				<Scripts />
+			</body>
+		</html>
+	);
+}
+
+/**
+ * Branded, information-free error state. Mirrors the Worker-level
+ * serverErrorPage(): same copy tone, no stack, no error.message. `reset`
+ * re-mounts the route tree (client-side retry).
+ */
+function RootError({ reset }: { error: unknown; reset: () => void }) {
+	return (
+		<html lang="en">
+			<head>
+				<HeadContent />
+			</head>
+			<body>
+				<Nav />
+				<main className="shell" style={{ paddingTop: "3rem" }}>
+					<div className="card" style={{ maxWidth: "36rem" }} aria-labelledby="err-title">
+						<span className="badge badge-danger">500 · Server error</span>
+						<h1 id="err-title" style={{ fontSize: "1.5rem" }}>
+							Something went wrong
+						</h1>
+						<p className="muted">
+							An unexpected error occurred while rendering this page. It has
+							been logged — try again in a moment.
+						</p>
+						<div className="row">
+							<button type="button" className="btn btn-primary" onClick={() => reset()}>
+								Try again
+							</button>
+							<a className="btn" href="/">
+								Back to home
+							</a>
+						</div>
+					</div>
 				</main>
 				<Scripts />
 			</body>
