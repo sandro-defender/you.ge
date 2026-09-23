@@ -493,6 +493,66 @@ tbody tr:hover {
 	}
 }
 
+/* ── Toasts (components/Toast) ───────────────────────────────────────────── */
+.toast {
+	position: fixed;
+	right: clamp(1rem, 4vw, 2rem);
+	bottom: clamp(1rem, 4vw, 2rem);
+	z-index: 60; /* above the sticky nav (z-index 20) */
+	display: flex;
+	align-items: center;
+	gap: 0.9rem;
+	max-width: min(26rem, calc(100vw - 2rem));
+	padding: 0.8rem 1rem;
+	border-radius: var(--radius);
+	border: 1px solid var(--border-strong);
+	background: var(--bg-raised);
+	box-shadow: var(--shadow);
+	font-size: 0.9rem;
+}
+.toast-success {
+	border-color: rgba(61, 220, 151, 0.5);
+}
+.toast-error {
+	border-color: rgba(255, 107, 122, 0.5);
+}
+.toast-info {
+	border-color: var(--border-strong);
+}
+.toast-close {
+	flex: none;
+	display: grid;
+	place-items: center;
+	width: 1.6rem;
+	height: 1.6rem;
+	border: none;
+	border-radius: 50%;
+	background: transparent;
+	color: var(--text-dim);
+	font-size: 1.1rem;
+	line-height: 1;
+	cursor: pointer;
+}
+.toast-close:hover {
+	background: var(--bg-hover);
+	color: var(--text);
+}
+
+/* ── Sync run history (routes/admin/index) ───────────────────────────────── */
+.run-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: grid;
+	gap: 0.45rem;
+}
+.run-list li {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	flex-wrap: wrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,

@@ -1,7 +1,9 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, APIError } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { eq, sql } from "drizzle-orm";
 import { admin } from "better-auth/plugins";
 import { createDb } from "./db";
+import { user as userTable } from "../db/schema";
 import { siteRoles } from "./auth-roles";
 import type { Env } from "./env";
 
@@ -32,10 +34,14 @@ export function createAuth(env: Env) {
 
 	const isDev = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1");
 
+	// ONE Drizzle wrapper per request, shared by the adapter and the last-admin
+	// guard below (two wrappers fight over SQLite's write lock under wrangler dev).
+	const db = createDb(env.DB);
+
 	return betterAuth({
 		// D1 has no direct better-auth adapter. Drizzle (or Kysely) is required —
 		// searching for a `d1Adapter()` wastes hours, it does not exist.
-		database: drizzleAdapter(createDb(env.DB), {
+		database: drizzleAdapter(db, {
 			provider: "sqlite",
 		}),
 
@@ -119,6 +125,66 @@ export function createAuth(env: Env) {
 				allowImpersonatingAdmins: false,
 			}),
 		],
+
+		/**
+		 * ── LAST-ADMIN GUARD (R5) ────────────────────────────────────────────
+		 * Verified against installed better-auth 1.7.5 (routes.mjs): the admin
+		 * plugin's setRole has NO last-admin protection — an admin may demote
+		 * themselves to `user` even when they are the only admin, which locks
+		 * EVERYONE out of /admin (fixable only via `npm run auth:grant-admin`
+		 * against the DB). banUser already blocks self-ban, so setRole is the
+		 * one lockout vector.
+		 *
+		 * Implemented on `databaseHooks.user.update.before` because it is the
+		 * only hook surface the 1.7.5 RUNTIME actually invokes (the top-level
+		 * `hooks: { before }` option exists in the types but is never read —
+		 * checked every dist .mjs). It fires on EVERY user update, so the
+		 * first job is to ignore everything that is not a role demotion. It
+		 * also covers /admin/update-user, which can set role too.
+		 *
+		 * Fail-open only when the target id cannot be determined (no endpoint
+		 * context / body.userId) — those flows are not HTTP admin calls, and
+		 * grant-admin.mjs writes SQL directly, bypassing hooks entirely (that
+		 * is deliberate: it is the owner's lockout recovery tool).
+		 */
+		databaseHooks: {
+			user: {
+				update: {
+					before: async (data, context) => {
+						const newRole = (data as { role?: unknown }).role;
+						// Only role demotions FROM admin are guarded. A promotion to
+						// admin, a ban (banned/banReason fields), name update, etc.
+						// pass straight through.
+						if (typeof newRole !== "string" || newRole === "admin") return;
+
+						const body = (
+							context as { body?: unknown } | null | undefined
+						)?.body as { userId?: unknown } | undefined;
+						const targetId = typeof body?.userId === "string" ? body.userId : null;
+						if (!targetId) return;
+
+						const target = await db
+							.select({ role: userTable.role })
+							.from(userTable)
+							.where(eq(userTable.id, targetId))
+							.limit(1);
+						if (target[0]?.role !== "admin") return; // not an admin demotion
+
+						const counted = await db
+							.select({ admins: sql<number>`count(*)` })
+							.from(userTable)
+							.where(eq(userTable.role, "admin"));
+
+						if (Number(counted[0]?.admins ?? 0) > 1) return; // another admin remains
+
+						throw new APIError("BAD_REQUEST", {
+							message:
+								"Cannot demote the last administrator — grant another user the admin role first (or run npm run auth:grant-admin).",
+						});
+					},
+				},
+			},
+		},
 
 		advanced: {
 			// Ip from Cloudflare's headers, not the direct peer (which is always

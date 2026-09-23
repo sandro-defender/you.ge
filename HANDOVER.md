@@ -199,6 +199,50 @@ Requirements, verbatim from the user:
     recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
     suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
+- **R5 completed (2026-09-23):** Admin UX — users + repos workflows:
+  - **Last-admin guard (SERVER-side):** verified against installed
+    better-auth 1.7.5 (`routes.mjs`): setRole has NO last-admin protection
+    (self-demotion lockout was possible; banUser already blocks self-ban).
+    The top-level `hooks: {before}` option is DEAD TYPE in 1.7.5 — the
+    runtime only invokes `databaseHooks` (checked every dist .mjs). Guard
+    lives on `databaseHooks.user.update.before` in `src/lib/auth.ts`: any
+    role demotion FROM admin when adminCount=1 throws `APIError` 400 (covers
+    both /admin/set-role and /admin/update-user; grant-admin.mjs bypasses
+    hooks by design — it is the lockout recovery tool). E2E-verified: only
+    admin demoting self → 400 + message; promote second admin → 200; demote
+    original → 200. Client-side belt in users.tsx: non-admin options
+    disabled for the last admin (their own row) + "(you)" marker.
+  - **Users page:** role filter (all/user/member/admin, live counts) +
+    existing search — both verified in-browser (filter=member → 1 row,
+    search=plainuser → 1 row).
+  - **Repos page:** ↑/↓ reorder swaps sortOrder with the rendered neighbour
+    (equal values get a nudge), moves across the featured/non-featured
+    boundary are DISABLED (featured pins to top by ORDER BY — impossible by
+    sortOrder alone, so the buttons are honest instead of silently no-op).
+    featured/hidden toggles + description edits are optimistic with
+    snapshot rollback on failure (verified: toggle click → aria-checked
+    flipped → PATCH persisted in DB). Custom description capped at 200
+    chars — maxLength + live counter client-side, 400 server-side.
+  - **Sync UX:** shared `components/SyncNowButton.tsx` (repos page + admin
+    overview): POST /sync → polls /api/admin/sync-log every 2s (max ~40s)
+    for a run newer than the trigger → toasts the run's REAL outcome
+    (ok+repoCount+duration / error+message) via `components/Toast.tsx`
+    (role=alert for errors, role=status otherwise). Overview also gained a
+    recent-runs list. `apiSend` now accepts GET (for the poll).
+  - **Acceptance E2E (curl):** grant member → /projects 200 → revoke → 403;
+    ban → 302 (banUser deletes sessions — falls to the no-session path) →
+    unban 200; self-ban 400 (better-auth); description 201 chars → 400,
+    200 → 200; reorder PATCH → order changes; no new admin routes (only
+    admin-router PATCH gained the cap — still behind requireAdmin).
+    ⚠ Fixture trap hit here: banning a fixture user DELETES their seeded
+    session row, and role-matrix-smoke.sh only regenerates cookies, not the
+    SQL — re-apply `seed-local-test-users.mjs > /tmp/seed.sql | wrangler
+    d1 execute --local` before re-running the matrix or the user-role rows
+    fail as no-session (cost 5 red checks to learn).
+  - **Bulk grant deliberately NOT built** (roadmap said ask the owner about
+    expected user count first — a portfolio of a handful of invited users
+    does not need it; a loop over setRole is the obvious shape if ever
+    needed).
 - **R3 local-only completed (2026-09-22):** GitHub sync now filters archived
   repos, upserts by stable GitHub id so renamed repos follow their row, and
   skips/logs renamed-slug conflicts instead of aborting the whole batch. It
@@ -547,6 +591,13 @@ meta pinning), theme colours and correct `<title>`s on every page. The
 *Acceptance:* full grant→view→revoke cycle without touching SQL; no new
 admin routes bypass `requireAdmin`; tsc/build/matrix green.
 
+*Status:* **done (2026-09-23)** — all four items; bulk grant skipped
+deliberately (owner question: expected user count is small; see §3 R5).
+Last-admin guard is server-side (databaseHooks — the only hook surface
+1.7.5 actually invokes); the top-level `hooks` option is dead type, do not
+"use" it. Screenshots in this session's summary: users/repos/overview at
+1280 + 375, all interactions exercised in a real browser.
+
 ---
 
 ### R6 — Security review + error handling  ·  ~60%
@@ -757,9 +808,12 @@ human to run. No script in this repo creates or migrates a database on its own.
     │   ├── guard.ts               requireSession, requireAdmin, requireMember
     │   ├── gate-page.ts           branded 403 gate pages, escaped (R4)
     │   ├── repos-router.ts        /projects, /projects/by-slug (indexed reads)
-    │   ├── admin-router.ts        /admin/repos, PATCH, /sync, /sync-log
+    │   ├── admin-router.ts        /admin/repos, PATCH (200-char desc cap), /sync, /sync-log
     │   └── github-sync.ts         ⭐ cron sync, single multi-row upsert
-    ├── components/Nav.tsx
+    ├── components/
+    │   ├── Nav.tsx                session-aware nav (public routes: get-session)
+    │   ├── SyncNowButton.tsx      sync + poll sync-log + result toast (R5)
+    │   └── Toast.tsx              useToast + one-slot toast, a11y roles (R5)
     └── routes/
         ├── __root.tsx             head(): meta + ?url CSS link
         ├── index.tsx              public landing

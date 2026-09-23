@@ -60,6 +60,12 @@ export function createAdminRouter() {
 		if (typeof body.hidden === "boolean") patch.hidden = body.hidden;
 		if (typeof body.sortOrder === "number") patch.sortOrder = body.sortOrder;
 		if (body.customDescription !== undefined) {
+			if (typeof body.customDescription === "string" && body.customDescription.length > 200) {
+				return c.json(
+					{ error: "Custom description too long (max 200 characters)." },
+					400,
+				);
+			}
 			patch.customDescription =
 				typeof body.customDescription === "string" ? body.customDescription : null;
 		}

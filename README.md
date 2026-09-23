@@ -149,6 +149,14 @@ Page refusals render the branded gate pages from `src/server/gate-page.ts`
 (pending / restricted / suspended) with the exact same copy as the API 403
 bodies — change them together or neither.
 
+**Last-admin protection:** better-auth 1.7.5 does NOT stop the only admin
+from demoting themselves (verified in the installed source). A
+`databaseHooks.user.update.before` guard in `src/lib/auth.ts` rejects any
+role demotion from `admin` when it would leave zero admins — 400 with an
+explanatory message, covering both `/admin/set-role` and
+`/admin/update-user`. `scripts/grant-admin.mjs` bypasses hooks by design:
+it is the lockout recovery tool.
+
 Admin bootstrap: sign in with Google once (creates the `user` row), then
 `node scripts/grant-admin.mjs you@example.com` — a `user.role` UPDATE through
 `wrangler d1 execute`, exactly what better-auth's own `setRole` does under the
@@ -389,9 +397,12 @@ Each was verified against the installed packages. **Do not “fix” these.**
     │   ├── guard.ts            requireSession, requireAdmin
     │   ├── gate-page.ts        branded 403 gate pages (Worker-rendered, escaped)
     │   ├── repos-router.ts     /projects, /projects/by-slug (indexed reads)
-    │   ├── admin-router.ts     /admin/repos CRUD + /sync + /sync-log
+    │   ├── admin-router.ts     /admin/repos CRUD + /sync + /sync-log (200-char desc cap)
     │   └── github-sync.ts      ⭐ cron sync, single multi-row upsert
-    ├── components/Nav.tsx
+    ├── components/
+    │   ├── Nav.tsx             session-aware nav
+    │   ├── SyncNowButton.tsx   sync → poll sync-log → outcome toast
+    │   └── Toast.tsx           one-slot toast, a11y roles
     └── routes/
         ├── __root.tsx          ⭐ document shell + head() (fact #13)
         ├── index.tsx           public landing
