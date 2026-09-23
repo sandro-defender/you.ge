@@ -19,8 +19,9 @@ import { parseJsonc } from "./jsonc.mjs";
 
 const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 // Keep in sync with scripts/d1-safety-check.mjs and scripts/grant-admin.mjs.
-const DB_NAME_PREFIX = "you.ge";
-const RECOMMENDED_DB_NAME = "you.ge-portfolio";
+// Renamed by owner instruction 2026-09-24 (prefix was "you.ge", name "you.ge-portfolio").
+const DB_NAME_PREFIX = "you-ge";
+const RECOMMENDED_DB_NAME = "you-ge-main";
 
 const bold = (s) => `\x1b[1m${s}\x1b[0m`;
 const green = (s) => `\x1b[32m${s}\x1b[0m`;

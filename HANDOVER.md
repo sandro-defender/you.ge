@@ -22,8 +22,10 @@ contradict popular tutorials; each one says why and how it was verified.
 >
 > **Hard constraints (all standing, owner-updated 2026-09-22):**
 > 1. In the user's Cloudflare account, create/migrate ONLY a D1 database
->    whose name starts with the prefix **`you.ge`** (recommended:
->    `you.ge-portfolio`). Never read/modify any other remote DB. Local
+>    whose name starts with the prefix **`you-ge`** (recommended:
+>    `you-ge-main`; renamed by owner instruction 2026-09-24 — the prefix was
+>    `you.ge` and the name `you.ge-portfolio` before). Never read/modify any
+>    other remote DB. Local
 >    Miniflare SQLite (`--local`) is always fine. Never run anything with
 >    `--remote` against a database that fails the prefix or empty checks.
 >    `scripts/d1-safety-check.mjs` enforces the prefix + empty rules and must
@@ -122,7 +124,8 @@ Requirements, verbatim from the user:
   - Layout settled: `app/` moved to the repo root, legacy casino/games site
     removed (owner's standing instruction; recoverable from git history).
   - **`you.ge` prefix rule finished** in `scripts/d1-safety-check.mjs`
-    (prefix `you.ge` + recommended `you.ge-portfolio`) and mirrored in
+    (prefix `you.ge` + recommended `you.ge-portfolio` — renamed 2026-09-24 to
+    `you-ge` / `you-ge-main`, see §0) and mirrored in
     `scripts/d1-setup.mjs` / `grant-admin.mjs` / `wrangler.jsonc` /
     `package.json`. Verified: placeholder id still blocks (exit 1), old name
     `you-ge-portfolio` and unrelated names rejected at check 1, `you.ge*`
@@ -205,6 +208,21 @@ Requirements, verbatim from the user:
     recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
     suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
+- **Owner instruction (2026-09-24): D1 renamed `you.ge-portfolio` →
+  `you-ge-main`** (and the reserved prefix `you.ge` → `you-ge`, together —
+  the name could never pass the old prefix check). Changed in ALL the
+  places the wrangler.jsonc comment lists: d1-safety-check.mjs,
+  d1-setup.mjs, grant-admin.mjs, wrangler.jsonc, README, HANDOVER (§0/§5/
+  §6/§8/§9), plus the GitHub sync User-Agent. The check STRUCTURE is
+  unchanged (owner's "must not be weakened" rule): still prefix → id →
+  empty-DB, fail-closed parsing. Re-probed: correct name + placeholder id
+  → exit 1 at the id check; wrong name → exit 1 at check 1; grant-admin
+  --local grant/verify/revoke E2E ✓; matrix 40/40, next-guard 22/22,
+  typecheck/build/leak green. Two adjacent finds: (a) renaming orphans
+  local Miniflare state (name-keyed — see §5 note; re-migrated + re-seeded
+  locally); (b) grant-admin's failure path printed BLANK error text
+  (`err.stderr ?? err.message` keeps "" — wrangler puts D1 errors on
+  stdout) — fixed to surface stdout+stderr+message.
 - **R8 completed (2026-09-24):** Owner docs + decommission prep — the final
   roadmap round:
   - **Owner runbook** (README "Owner runbook — day-2 operations"):
@@ -378,7 +396,7 @@ Requirements, verbatim from the user:
 ### ❌ Not done (→ §6 ROADMAP)
 
 - `database_id` still placeholder (owner runs the README "First deploy"
-  runbook: `d1 create you.ge-portfolio` → paste uuid → `d1:safety` →
+  runbook: `d1 create you-ge-main` → paste uuid → `d1:safety` →
   `db:migrate:remote` → secrets → `deploy`). No Google OAuth creds yet (R2);
   no real admin row yet (grant-admin needs the owner's first Google sign-in).
 - `?next=` open-redirect guard now unit+HTTP tested (R4, 22/22), but the
@@ -489,7 +507,7 @@ Runtime facts verified against installed better-auth 1.7.5 source:
 npx tsc --noEmit                 # expect: 0 errors
 rm -rf dist && npx vite build    # expect: success (rm first: empty-dist = false-clean leak check)
 npm run d1:safety                # expect: exit 1, BLOCKED on placeholder id
-                                 #         (exit 0 only after a real you.ge* id is pasted)
+                                 #         (exit 0 only after a real you-ge* id is pasted)
 # leak check — every line must say clean:
 for n in drizzle api.github.com BETTER_AUTH_SECRET sqlite_master D1Database; do
   printf '%-22s ' "$n"; grep -rqi "$n" dist/client/ && echo FOUND || echo clean
@@ -498,6 +516,12 @@ done
 npx vite dev &
 node scripts/seed-local-test-users.mjs > /tmp/seed.sql
 npx wrangler d1 execute DB --local --file /tmp/seed.sql   # only if fixtures missing
+# ⚠ Renaming database_name in wrangler.jsonc (done 2026-09-24:
+# you.ge-portfolio → you-ge-main) orphans the OLD local Miniflare state —
+# the local DB file is keyed by the database NAME, so the "new" name starts
+# empty. Recovery is exactly the documented loop above: db:migrate:local →
+# re-seed. Nothing remote is affected (a remote DB cannot be renamed; you
+# would create a new one and the safety checks apply from scratch).
 bash scripts/role-matrix-smoke.sh          # expect: pass=40 fail=0
 npm run test:next                          # expect: pass=22 fail=0 (http half needs the dev server)
 ```
@@ -650,12 +674,12 @@ deployment work and two taste/policy calls. Round details preserved below.
 *Read first:* §8 (safety), README "First deploy" (the runbook), §0 constraints.
 
 1. Owner confirmation for account commands is IN the session prompt that
-   commissioned R1 ("create the you.ge* D1 DB … deploy"), constrained by the
+   commissioned R1 ("create the project D1 DB … deploy" — now you-ge*), constrained by the
    prefix + empty checks. The agent sandbox has **no Cloudflare credentials**
    — the owner runs the remote commands from README "First deploy" (chosen:
    runbook-only).
 2. `npm run d1:setup` (read-only listing) → owner runs
-   `npx wrangler d1 create you.ge-portfolio` (prefix rule!) → pastes the uuid
+   `npx wrangler d1 create you-ge-main` (prefix rule!) → pastes the uuid
    into `wrangler.jsonc` `database_id`.
 3. `npm run d1:safety` must now **pass** (it only ever passed-exit-0 with a
    real id + empty DB) → `npm run db:migrate:remote` (still chains the guard;
@@ -992,9 +1016,10 @@ Each was verified against the installed packages, not memory.
 `scripts/d1-safety-check.mjs` runs before any remote migration
 (`npm run db:migrate:remote` chains it with `&&`). It refuses unless:
 
-1. `database_name` starts with the reserved prefix **`you.ge`** (owner rule;
-   recommended concrete name `you.ge-portfolio` — an unusual prefix so it
-   cannot collide with an existing database), and
+1. `database_name` starts with the reserved prefix **`you-ge`** (owner rule;
+   recommended concrete name `you-ge-main` — renamed by owner instruction
+   2026-09-24, was `you.ge`/`you.ge-portfolio`; the check structure is
+   unchanged), and
 2. that name resolves to the configured `database_id`, and
 3. the target contains **no user tables** — and the `d1 execute --json` row
    parse (`d1Rows`) is fail-closed: an unrecognised output envelope aborts
@@ -1020,7 +1045,7 @@ human to run. No script in this repo creates or migrates a database on its own.
 .                              ← repo root = the whole project (owner-settled)
 ├── HANDOVER.md                    ← this file
 ├── package.json                   scripts: dev/build/deploy/db:*/d1:*/auth:*
-├── wrangler.jsonc                 main=src/server.ts, D1 binding (name you.ge*),
+├── wrangler.jsonc                 main=src/server.ts, D1 binding (name you-ge*),
 │                                  cron */6h, you.ge custom-domain route
 ├── vite.config.ts                 cloudflare({viteEnvironment:{name:"ssr"}}) FIRST
 ├── tsconfig.json                  types: ["node","vite/client"] — NOT workers-types

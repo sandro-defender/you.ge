@@ -14,8 +14,10 @@
  *   worse, be followed by destructive statements against, existing tables.
  *
  * What it enforces, in order
- *   1. wrangler.jsonc database_name must start with the prefix "you.ge"
- *      (owner-settled rule; the recommended concrete name is "you.ge-portfolio").
+ *   1. wrangler.jsonc database_name must start with the prefix "you-ge"
+ *      (owner-settled rule; the recommended concrete name is "you-ge-main").
+ *      Renamed by owner instruction 2026-09-24 — the prefix was "you.ge" and
+ *      the recommended name "you.ge-portfolio" before. Same checks, new name.
  *   2. That name must resolve to the database_id in wrangler.jsonc.
  *   3. The target must be EMPTY — no user tables, no rows in `user`/`session`.
  *
@@ -45,8 +47,8 @@ const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
  * change them here AND in scripts/d1-setup.mjs and scripts/grant-admin.mjs
  * at the same time.
  */
-const DB_NAME_PREFIX = "you.ge";
-const RECOMMENDED_DB_NAME = "you.ge-portfolio";
+const DB_NAME_PREFIX = "you-ge";
+const RECOMMENDED_DB_NAME = "you-ge-main";
 
 const ALLOW_NON_EMPTY = process.argv.includes("--allow-non-empty");
 

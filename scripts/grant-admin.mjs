@@ -39,7 +39,8 @@ import path from "node:path";
 import { parseJsonc } from "./jsonc.mjs";
 
 // Keep in sync with scripts/d1-safety-check.mjs and scripts/d1-setup.mjs.
-const DB_NAME_PREFIX = "you.ge";
+// Renamed by owner instruction 2026-09-24 (prefix was "you.ge").
+const DB_NAME_PREFIX = "you-ge";
 
 const argv = process.argv.slice(2);
 const LOCAL = argv.includes("--local");
@@ -134,10 +135,17 @@ try {
 	}
 	console.log(`\n${green(bold("✔ done"))} — role replaced (setRole semantics) on ${bold(name)}.\n`);
 } catch (err) {
+	// wrangler prints D1 errors to STDOUT (as --json), auth errors to stderr —
+	// surface both. (`err.stderr ?? err.message` alone printed blank lines when
+	// stderr was "" — an empty string is not nullish.)
+	const detail = [err.stdout, err.stderr, err.message]
+		.filter(Boolean)
+		.join("\n")
+		.slice(0, 600);
 	fail([
 		`wrangler d1 execute failed.`,
 		``,
-		`  ${String(err.stderr ?? err.message).split("\n").join("\n  ").slice(0, 600)}`,
+		`  ${detail.split("\n").join("\n  ")}`,
 		``,
 		`If this says you are not authenticated, run ${bold("npx wrangler login")}.`,
 	]);

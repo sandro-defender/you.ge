@@ -207,7 +207,8 @@ factory-based D1 config (HANDOVER §7).
 
 **Never create, read, migrate, or touch any D1 database in the Cloudflare
 account except a brand-new one whose name starts with the reserved prefix
-`you.ge` (recommended: `you.ge-portfolio`). Local Miniflare SQLite (`--local`)
+`you-ge` (recommended: `you-ge-main` — renamed by owner instruction
+2026-09-24). Local Miniflare SQLite (`--local`)
 is fine. Never run anything with `--remote` against a database that fails the
 prefix or empty checks.**
 
@@ -238,12 +239,12 @@ prefix or empty checks.**
 ## First deploy (owner-run — needs the real Cloudflare account)
 
 Run from the repo root, in order. The D1 name must start with the reserved
-prefix `you.ge` (recommended concrete name: `you.ge-portfolio` — the scripts
+prefix `you-ge` (recommended concrete name: `you-ge-main` — the scripts
 enforce the prefix; see [D1 safety](#d1-safety)):
 
 ```bash
 npm run d1:setup                                   # read-only: lists existing DBs
-npx wrangler d1 create you.ge-portfolio            # NEW database (prefix rule)
+npx wrangler d1 create you-ge-main                 # NEW database (prefix rule)
 # paste the printed uuid into wrangler.jsonc "database_id"
 npm run d1:safety                                  # must pass now (exit 0)
 npm run db:migrate:remote                          # chains the safety check first
@@ -317,7 +318,7 @@ curl -s https://you.ge/ | grep -o '<title>[^<]*</title>'              # you.ge �
 
 `npm run db:migrate:remote` chains the safety guard, which **refuses to
 touch a database that already has tables**. On day one that is exactly right
-(your fresh `you.ge-portfolio` is empty). On day 2+ your own DB legitimately
+(your fresh `you-ge-main` is empty). On day 2+ your own DB legitimately
 has tables, so re-run the exact command the guard prints:
 
 ```bash
@@ -326,7 +327,7 @@ npx wrangler d1 migrations apply DB --remote
 ```
 
 The flag is intentionally ugly: it means "I checked the database_name is my
-own `you.ge*` DB". Never use it to point at anything else.
+own `you-ge*` DB". Never use it to point at anything else.
 
 ### Rotate a secret
 

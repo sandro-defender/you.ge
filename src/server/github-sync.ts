@@ -217,7 +217,7 @@ async function fetchRepos(
 		headers: {
 			Accept: "application/vnd.github+json",
 			"X-GitHub-Api-Version": "2022-11-28",
-			"User-Agent": "you.ge-portfolio-worker",
+			"User-Agent": "you-ge-main-worker",
 			...(token ? { Authorization: `Bearer ${token}` } : {}),
 		},
 	});
