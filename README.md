@@ -29,6 +29,10 @@ npx vite dev                 # http://localhost:3000
 Copy `.dev.vars.example` → `.dev.vars` and fill in the secrets before sign-in
 can work (see [Secrets](#secrets) and [Google OAuth](#google-oauth)).
 
+Already deployed and running? Day-2 operations (redeploy, rotate secrets,
+revoke access, read the sync log, watch errors) live in the
+[Owner runbook](#owner-runbook--day-2-operations-r8).
+
 Other everyday commands:
 
 | Command | What it does |
@@ -286,6 +290,129 @@ https://you.ge/api/auth/callback/google
 A mismatch fails *every* sign-in and the cause is invisible from the browser.
 Local dev needs `.dev.vars` filled in; production needs
 `wrangler secret put GOOGLE_CLIENT_SECRET`.
+
+---
+
+## Owner runbook — day-2 operations (R8)
+
+Everything below assumes the first deploy already happened. All commands run
+from the repo root. **Nothing here needs agent access** — it is the complete
+day-2 operator manual.
+
+### Redeploy after pulling changes
+
+```bash
+git pull
+npm ci
+npm run typecheck        # must stay at 0 errors
+npm run build            # catches bundling surprises before deploy
+npm run deploy           # vite build + wrangler deploy -c dist/server/wrangler.json
+# smoke the live site:
+curl -s -o /dev/null -w '%{http_code}\n' https://you.ge/api/health   # 200
+curl -s -o /dev/null -w '%{http_code}\n' https://you.ge/robots.txt   # 200
+curl -s https://you.ge/ | grep -o '<title>[^<]*</title>'              # you.ge — Sandro's web projects
+```
+
+### Apply a new migration to the live DB
+
+`npm run db:migrate:remote` chains the safety guard, which **refuses to
+touch a database that already has tables**. On day one that is exactly right
+(your fresh `you.ge-portfolio` is empty). On day 2+ your own DB legitimately
+has tables, so re-run the exact command the guard prints:
+
+```bash
+node scripts/d1-safety-check.mjs --allow-non-empty && \
+npx wrangler d1 migrations apply DB --remote
+```
+
+The flag is intentionally ugly: it means "I checked the database_name is my
+own `you.ge*` DB". Never use it to point at anything else.
+
+### Rotate a secret
+
+```bash
+npx wrangler secret put BETTER_AUTH_SECRET       # openssl rand -base64 32
+npx wrangler secret put GOOGLE_CLIENT_SECRET     # after creating it in Google Cloud Console
+npx wrangler secret put GITHUB_TOKEN             # after creating a new fine-grained PAT
+```
+
+Effects, so nothing surprises you:
+
+- **`BETTER_AUTH_SECRET`** invalidates every session cookie — all users
+  (including you) simply sign in again. No data is lost; old session rows
+  expire out of D1 on their own.
+- **`GOOGLE_CLIENT_SECRET`** only takes effect for new sign-ins; already
+  signed-in sessions are unaffected.
+- **`GITHUB_TOKEN`** is only read by the cron sync; a bad token degrades
+  the sync (logged, surfaced in /admin), it never breaks the site.
+- Local dev has its own secrets in `.dev.vars` — rotate that file separately
+  (`node scripts/seed-local-test-users.mjs --cookies` re-mints fixture
+  cookies bound to the new secret).
+
+### Revoke someone's access
+
+All of it happens on **/admin/users** (sign in as an admin):
+
+| Action | Effect | When it lands |
+|---|---|---|
+| Role → `user` | loses `/projects` (member gate 403) | next request; an **already-open browser tab** can keep access up to ~5 min (session `cookieCache`, see `src/lib/auth.ts` — accepted trade-off) |
+| Ban | signs them out everywhere (sessions deleted) + suspended page if they sign back in | same ~5-min worst case for an open tab |
+| Revoke sessions | signs them out everywhere, keeps the account | same |
+| Role → `member` | grants `/projects` | immediate on their next request |
+
+If you are locked out of admin entirely (e.g. you demoted yourself — the
+server blocks the *last* admin demotion, but a second admin could demote
+you): `node scripts/grant-admin.mjs you@example.com` re-grants via
+`wrangler d1 execute` directly. It is the designated lockout-recovery tool.
+
+### Check the GitHub sync / read sync_log
+
+- **/admin** (overview) shows recent sync runs with real outcomes.
+- Raw, from anywhere:
+
+```bash
+npx wrangler d1 execute DB --remote --command \
+  "SELECT run_at, status, repo_count, duration_ms, message FROM sync_log ORDER BY run_at DESC LIMIT 10;"
+```
+
+- Trigger a sync without waiting for the cron: **Sync now** on /admin or the
+  repos page (POST /api/admin/sync), then watch the same list.
+
+### Watch live errors
+
+```bash
+npx wrangler tail                    # live console.error/log stream
+npx wrangler tail --format pretty    # easier to read
+```
+
+Loader/render failures log the real error server-side and show the visitor
+only a generic 500 page (by design — see "Security & error handling"), so
+`tail` is where the truth lives.
+
+### Local dev from a clean clone
+
+```bash
+git clone <repo> && cd you.ge
+npm ci
+cp .dev.vars.example .dev.vars    # fill in at least BETTER_AUTH_SECRET (any 32+ chars)
+npm run db:migrate:local          # local Miniflare SQLite (binding "DB")
+npx vite dev                      # http://localhost:3000
+```
+
+Optional but recommended for testing access levels:
+
+```bash
+node scripts/seed-local-test-users.mjs > /tmp/seed.sql
+npx wrangler d1 execute DB --local --file /tmp/seed.sql
+node scripts/seed-local-test-users.mjs --cookies   # ready-made Cookie headers
+bash scripts/role-matrix-smoke.sh                  # expect: pass=40 fail=0
+npm run test:next                                   # expect: pass=22 fail=0
+```
+
+Google sign-in locally additionally needs `GOOGLE_CLIENT_ID` +
+`GOOGLE_CLIENT_SECRET` in `.dev.vars` with the localhost redirect URI
+registered (see [Google OAuth](#google-oauth)). Without them the site works
+fine — only the "Continue with Google" round-trip cannot.
 
 ---
 

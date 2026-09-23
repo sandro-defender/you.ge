@@ -105,6 +105,12 @@ Requirements, verbatim from the user:
 ### ✅ Done and verified
 
 - All config, schema, server code, routes and components written.
+- **All eight roadmap rounds closed (R1–R8, 2026-09-24 — see the §6 status
+  table).** Final suite state at close: typecheck 0 errors, build green,
+  client-bundle leak check clean, role matrix **40/40**, next-guard
+  **22/22**, page security headers + robots/noindex verified on dev AND the
+  built preview. Remaining work is owner-run (first deploy, Google OAuth
+  creds) + the §6 BACKLOG.
 - `npx tsc --noEmit` → **0 errors**; `npx vite build` → **succeeds**
   (`dist/server/index.js` + `dist/client/`); client-bundle leak check
   **ALL_CLEAN** (§5 list).
@@ -199,6 +205,30 @@ Requirements, verbatim from the user:
     recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
     suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
+- **R8 completed (2026-09-24):** Owner docs + decommission prep — the final
+  roadmap round:
+  - **Owner runbook** (README "Owner runbook — day-2 operations"):
+    redeploy + live smoke, day-2+ remote migrations (the safety guard's
+    no-tables rule is a FIRST-migrate rule; from day 2 your own DB has
+    tables, so the runbook shows the exact `--allow-non-empty` re-run),
+    secret rotation with effect notes (BETTER_AUTH_SECRET = everyone
+    re-signs-in, no data loss), an access-revocation table (role demote /
+    ban / revoke-sessions vs the ~5-min `cookieCache` lag for an open tab —
+    the cache cookie is `better-auth.session_data`, verified in the
+    installed dist), sync_log reading (admin UI + raw SQL), `wrangler tail`,
+    clean-clone local dev. **The runbook's sync_log SQL was wrong on first
+    write** (camelCase Drizzle property names instead of the snake_case DB
+    columns) — caught by executing it against local D1 before shipping;
+    that is why every runbook command should be run once before it is
+    trusted.
+  - **Roadmap archived:** §6 now opens with a status table (R1–R8, dates,
+    what remains owner-run) + a BACKLOG list (rate limiting decision, og
+    image replacement, prod suite re-run, bulk grant, cookieCache tuning,
+    standing out-of-scope).
+  - **§7 fact re-probe:** all 17 facts re-checked (versions re-read from
+    node_modules: auth/better-auth 1.7.5, hono 4.13.8, react-router
+    1.170.38, react-start 1.168.57; fact #12 proven empirically; #2/#3/
+    #10/#11/#14 re-grepped). None rotted.
 - **R7 completed (2026-09-24):** SEO / meta / share cards:
   - **Indexability model:** root `head()` keeps a fail-closed
     `robots: noindex, nofollow` DEFAULT; `/` overrides to `index, follow`
@@ -563,7 +593,44 @@ what surprised you) → stop.
 
 ---
 
-### R1 — First production deploy (no OAuth yet)  ·  est. ~60% of budget  ·  ~90% done
+## ROADMAP STATUS — ARCHIVED AT R8 (2026-09-24)
+
+All eight rounds are closed. The build is feature-complete for the stated
+goal (gated portfolio on Workers Free + D1 only); what remains is owner-run
+deployment work and two taste/policy calls. Round details preserved below.
+
+| Round | Scope | Status |
+|---|---|---|
+| R1 | First deploy | **local half ✅ 2026-09-22**; remote half = owner runbook task (README "First deploy") — blocked only on Cloudflare credentials |
+| R2 | Google OAuth | config + docs ✅; end-to-end needs the owner's Google credentials (README "Google OAuth") |
+| R3 | GitHub sync | **✅ 2026-09-22** (local, real API); remote verification is part of the owner's first-deploy smoke |
+| R4 | UX polish | **✅ 2026-09-23** (gate pages, retry, cards, ?next guard) |
+| R5 | Admin UX | **✅ 2026-09-23** (users + repos workflows, last-admin guard) |
+| R6 | Security + errors | **✅ 2026-09-24** (matrix 40/40, safeLoader, page headers) — rate limiting left to owner decision |
+| R7 | SEO / share cards | **✅ 2026-09-24** (indexable `/`, OG cards, real 404s) — og.jpg is a placeholder the owner may swap |
+| R8 | Owner docs + archive | **✅ 2026-09-24** (this runbook + archive) |
+
+### BACKLOG (nice-to-haves, deliberately not built)
+
+1. **Rate limiting on `/api/auth/*`** — owner decision (accept documented
+   risk vs a tiny D1 counter). Current stance: documented as accepted risk
+   in README; all auth is Google OAuth (no password endpoints).
+2. **Replace `public/og.jpg`** with a personal image (1200×630, same
+   filename or update the og:image meta).
+3. **Prod re-run of the suites** after first deploy — matrix/next-guard are
+   local-only by design; the owner can spot-check the same curls against
+   `https://you.ge`.
+4. **Bulk role grant** in /admin/users — deliberately skipped (a handful of
+   invited users; loop over setRole is the obvious shape if ever needed).
+5. **cookieCache maxAge** — 5 minutes today; lower it if the revocation lag
+   ever bites (cost: more D1 reads; see `src/lib/auth.ts` note 3).
+6. Out of scope unless the owner asks (standing): KV, Durable Objects,
+   multi-tab session sync, CSS frameworks, TanStack Query, i18n,
+   non-Google OAuth, Workers Paid features.
+
+---
+
+### R1 — First production deploy (no OAuth yet)  ·  CLOSED (local 2026-09-22; remote = owner runbook task)
 
 *Touches:* `wrangler.jsonc`, Cloudflare dashboard, `.dev.vars`→secrets.
 *Read first:* §8 (safety), README "First deploy" (the runbook), §0 constraints.
@@ -597,7 +664,7 @@ confusion — ask the user rather than improvising credentials.
 
 ---
 
-### R2 — Google OAuth end-to-end  ·  ~60%
+### R2 — Google OAuth end-to-end  ·  CLOSED (config done; e2e awaits owner credentials)
 
 *Touches:* Google Cloud Console (user-driven), `.dev.vars.example` docs,
 possibly `auth.ts` config if callback shape surprises.
@@ -623,7 +690,7 @@ work from `/admin/users`. *Likely time sink:* OAuth consent screen still in
 
 ---
 
-### R3 — GitHub sync hardening + first real data  ·  ~60%
+### R3 — GitHub sync hardening + first real data  ·  CLOSED 2026-09-22 (local; remote smoke at first deploy)
 
 *Touches:* `src/server/github-sync.ts`, `admin-router.ts` sync endpoints,
 `schema-app.ts` (only if a column is missing — add a migration then).
@@ -646,7 +713,7 @@ curated flags survive sync, cron `*/6h` shows a scheduled entry in
 
 ---
 
-### R4 — UX polish pass on gated pages  ·  ~60%
+### R4 — UX polish pass on gated pages  ·  CLOSED 2026-09-23
 
 *Touches:* `routes/projects.tsx`, `routes/login.tsx`, `routes/index.tsx`,
 `components/Nav.tsx`, `styles/app.css`, maybe new `components/`.
@@ -683,7 +750,7 @@ meta pinning), theme colours and correct `<title>`s on every page. The
 
 ---
 
-### R5 — Admin UX: users + repos workflows  ·  ~60%
+### R5 — Admin UX: users + repos workflows  ·  CLOSED 2026-09-23
 
 *Touches:* `routes/admin/users.tsx`, `routes/admin/repos.tsx`,
 `routes/admin/index.tsx`, `admin-router.ts` if new endpoints needed.
@@ -710,7 +777,7 @@ Last-admin guard is server-side (databaseHooks — the only hook surface
 
 ---
 
-### R6 — Security review + error handling  ·  ~95% (owner: rate-limit call)
+### R6 — Security review + error handling  ·  CLOSED 2026-09-24 (rate limit → backlog)
 
 *Touches:* `server.ts`, `guard.ts`, `app.ts`, new `routes/error.tsx` or
 `__root.tsx` errorComponent, headers config.
@@ -738,7 +805,7 @@ no stack traces in any 500 body (verified against the production build).
 
 ---
 
-### R7 — SEO / meta / share cards  ·  ~95% (owner: og image taste)
+### R7 — SEO / meta / share cards  ·  CLOSED 2026-09-24 (og image → backlog)
 
 *Touches:* `__root.tsx` `head()`, route heads, maybe `public/` images.
 
@@ -762,19 +829,29 @@ update the og:image/twitter:image meta.
 
 ---
 
-### R8 — Owner docs + decommission prep  ·  ~60%
+### R8 — Owner docs + decommission prep  ·  CLOSED 2026-09-24
 
-*Touches:* `README.md`, `HANDOVER.md` §3/§6, optional `app/docs/`.
+*Touches:* `README.md`, `HANDOVER.md` §3/§6.
 
-1. Write the "owner runbook": day-2 ops (rotate secret, revoke a user, read
-   sync_log, local dev from a clean clone, deploy checklist).
-2. Archive this ROADMAP: mark R1–R7 done with dates; move remaining nice-to-
-   haves into a backlog list.
-3. Final pass: every §7 fact still true? (Re-probe the two that rot fastest:
-   better-auth version, TanStack Start handler shape.)
+1. ✅ Owner runbook written: README "Owner runbook — day-2 operations" —
+   redeploy, remote migrations (incl. the `--allow-non-empty` day-2+ rule),
+   secret rotation with effect notes, access revocation table (incl. the
+   5-min cookieCache lag), sync_log reading (admin UI + verified raw SQL —
+   snake_case columns, caught by testing the command before shipping),
+   `wrangler tail`, clean-clone local dev.
+2. ✅ Roadmap archived: status table above (R1–R8 with dates) + BACKLOG
+   (rate limiting, og image, prod suite re-run, bulk grant, cookieCache
+   tuning, standing out-of-scope list).
+3. ✅ §7 fact re-probe (2026-09-24): auth/better-auth 1.7.5, hono 4.13.8,
+   @tanstack/react-router 1.170.38, react-start 1.168.57 — unchanged;
+   fact #12 (1-arg `startHandler.fetch`) proven empirically (dev server
+   renders through it); facts #2/#3/#10/#11/#14 re-grepped; hono
+   secureHeaders defaults re-verified during R6 this week; leak check
+   clean. No fact rotted.
 
-*Acceptance:* a cold-start agent can deploy+operate from docs alone; PR
-description summarises the whole arc for the owner.
+*Acceptance:* ✅ docs alone cover deploy+operate (README Quick start / First
+deploy / Owner runbook + HANDOVER §§4–8); ✅ PR #5 description carries the
+whole-arc summary for the owner.
 
 ---
 
