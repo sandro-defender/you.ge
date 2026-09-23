@@ -199,6 +199,48 @@ Requirements, verbatim from the user:
     recreate `.dev.vars` → `db:migrate:local` → re-seed before re-running
     suites. `node scripts/next-guard-test.mjs` with a dev server down
     exits 0 with the HTTP half SKIPped unless `--strict`.
+- **R7 completed (2026-09-24):** SEO / meta / share cards:
+  - **Indexability model:** root `head()` keeps a fail-closed
+    `robots: noindex, nofollow` DEFAULT; `/` overrides to `index, follow`
+    (verified in the installed headContentUtils: meta dedupes by
+    name/property, most-specific route wins — confirmed in real SSR
+    output). Every other route — /login, /projects, /admin, 404 — is
+    noindex. A future route that forgets its robots meta is hidden from
+    crawlers by default; for a gated site that is the correct failure
+    mode.
+  - **Share cards:** full OG/Twitter defaults at root (og:site_name, type,
+    title, description, url, image + dimensions/alt, twitter:card
+    summary_large_image, twitter:image). `/` refines og:title/description/
+    url and adds `rel=canonical https://you.ge/`. twitter:title/description
+    deliberately NOT set — Twitter falls back to og:*, keeping the
+    override chain single-sourced. Gated routes keep the generic card, so
+    no project/user data can appear in a share preview (and anonymous
+    scrapers only ever see the 302 anyway). og:image is
+    `public/og.jpg` — 1200×630, 16 KB, AI-generated to the site palette
+    (#0a0a0f / #7c6cff); the owner can replace the file (same name or
+    update the meta).
+  - **Soft-404 BUG found and fixed:** the `$` splat rendered the branded
+    404 UI as a MATCHED component, so every unknown path returned
+    **HTTP 200** — search engines would have indexed "Nothing here" as
+    content. Fix: the splat now throws `notFound()` in `beforeLoad` and
+    the branded UI lives in the root `notFoundComponent`
+    (`src/components/NotFound.tsx`) → real 404 status. The splat's own
+    `head()` title does NOT apply on the not-found path (root title
+    shows) — acceptable, noted in `$.tsx`.
+  - **robots.txt + sitemap.xml** served at the Worker entry (src/server.ts,
+    before the /api dispatch) — no third-party deps, no D1 reads,
+    `public, max-age=3600` + the page security headers. robots Disallows
+    /projects /admin /login /api/; sitemap lists only `https://you.ge/`
+    (the sole indexable URL). Both verified on dev and the built preview.
+  - **Gate/error pages:** added `X-Robots-Tag: noindex, nofollow` header on
+    top of the existing meta (belt-and-braces), verified on the built
+    preview 403.
+  - Verified end-to-end: dev + built-preview curls for `/` (title, robots
+    index,follow, canonical, og:*, twitter:card), member `/projects`
+    (noindex, generic og, **zero project names in <head>** — the list is
+    client-fetched so names aren't even in the SSR body), anonymous
+    `/projects` 302 unchanged, matrix 40/40, next-guard 22/22, leak
+    check clean, og.jpg lands in dist/client/.
 - **R6 completed (2026-09-24):** Security review + error handling:
   - **Matrix 20→40** (`scripts/role-matrix-smoke.sh`): 10 unit `hasRole`
     checks + 30 HTTP. New rows: expired session (302/401 + get-session
@@ -443,6 +485,11 @@ Baseline smoke (no cookies) — all green as of last run:
 | `GET /projects`, `/projects/foo`, `/admin`, `/admin/users` | 302 → `login?next=…` |
 | `GET /api/projects`, `/api/admin/repos` | 401 |
 | any of the above **+ forged `x-youge-session`** | still 302/401 |
+| `GET /projects` **with a forged `x-youge-session: {"role":"admin",…}` header** | **302**, *not* 200 — the header is stripped before anything reads it |
+| `GET /robots.txt` | **200**, `text/plain` — Disallow /projects /admin /login /api/, Sitemap line (R7) |
+| `GET /sitemap.xml` | **200**, `application/xml`, contains only `https://you.ge/` (the sole indexable URL) |
+| `GET /totally-bogus` | **404** with the branded Not Found body — *not* a 200 soft-404 (R7) |
+| `GET /og.jpg` | **200**, `image/jpeg` — share-card image (1200×630) |
 
 Role matrix (`scripts/role-matrix-smoke.sh`, 40 checks = 10 unit + 30 HTTP, last run **40/40**):
 
@@ -691,18 +738,27 @@ no stack traces in any 500 body (verified against the production build).
 
 ---
 
-### R7 — SEO / meta / share cards (site becomes indexable)  ·  ~60%
+### R7 — SEO / meta / share cards  ·  ~95% (owner: og image taste)
 
 *Touches:* `__root.tsx` `head()`, route heads, maybe `public/` images.
 
-1. Only do this if the owner wants the landing page public (portfolio SEO).
-   Title/description/OG/Twitter cards per route; canonical `https://you.ge`.
-2. `sitemap` + `robots` via a tiny public route (no third-party deps).
-3. Gated routes: `noindex` meta when 403 renders, never leak titles of
-   private projects into public meta.
+1. ✅ Landing page indexable (it was already public-rendering for anonymous
+   visitors; roadmap title is "site becomes indexable"). Title/description/
+   OG/Twitter cards per route; canonical `https://you.ge` on `/`. Fail-closed
+   default: root robots = noindex; ONLY `/` overrides to index,follow —
+   flip `/` back to hidden by deleting its robots override line.
+2. ✅ sitemap + robots served at the Worker entry (`src/server.ts`, pre-API
+   dispatch) — no third-party deps; sitemap lists only `https://you.ge/`.
+3. ✅ Gated routes: root-level noindex default; gate pages carry noindex
+   meta + `X-Robots-Tag` header; member `/projects` head contains ZERO
+   project names (generic og card only). **Also fixed the soft-404**: the
+   `$` splat now throws `notFound()` → real HTTP 404 (was 200).
 
-*Acceptance:* view-source shows correct OG tags on `/`; `/projects` 403 has
-no project names in `<head>`.
+*Acceptance:* ✅ view-source on `/` shows correct OG tags (verified dev +
+built preview); ✅ `/projects` 403/member HTML has no project names in
+`<head>`. Owner may want to replace `public/og.jpg` (AI-generated
+placeholder, 1200×630, 16 KB) with a personal image — keep the name or
+update the og:image/twitter:image meta.
 
 ---
 
@@ -817,6 +873,18 @@ Each was verified against the installed packages, not memory.
     The errorComponent/Worker-catch layers never render error.message, so
     nothing user-facing is lost.
 
+17. **TanStack head merge + the soft-404 splat trap.** Route `head()`
+    meta entries dedupe by `name`/`property` and the MOST-SPECIFIC route
+    wins (verified in installed `react-router/dist/esm/headContentUtils.js`
+    — matches iterate last→first, first seen wins; same for `title`). So a
+    route can override the root's `robots` — that is how `/` flips the
+    fail-closed root default to `index, follow`. SEPARATE trap: a `$`
+    splat route that *renders* a 404 UI is a MATCHED route → **HTTP 200**
+    soft-404. The splat must `throw notFound()` in `beforeLoad` and the
+    branded UI must live in the root `notFoundComponent` to get a real
+    404. On the not-found path the splat's own `head()` does NOT apply
+    (root title shows).
+
 16. **Hono's `secureHeaders()` only covers `/api/*`.** Pages are rendered by
     `startHandler` in `src/server.ts` and never pass through Hono, so the
     HTML documents — the clickjacking/sniffing surface that matters most —
@@ -899,7 +967,7 @@ human to run. No script in this repo creates or migrates a database on its own.
     │   ├── internal-header.ts     leaf module, no deps (§4)
     │   ├── next.ts                sanitiseNext — ?next= guard, leaf (R4)
     │   ├── session-fn.ts          createServerFn reading that header
-    │   ├── safe-loader.ts       sanitising loader wrapper — no error leakage (R6)
+    │   ├── safe-loader.ts       sanitising loader wrapper — no error leak (R6)
     │   ├── types.ts               PublicProject/AdminRepo/SyncRun (client+server)
     │   └── use-api.ts             useApi + apiSend, no TanStack Query
     ├── server/
@@ -916,16 +984,20 @@ human to run. No script in this repo creates or migrates a database on its own.
     │   ├── SyncNowButton.tsx      sync + poll sync-log + result toast (R5)
     │   └── Toast.tsx              useToast + one-slot toast, a11y roles (R5)
     └── routes/
-        ├── __root.tsx             head(): meta + ?url CSS link
-        ├── index.tsx              public landing
+        ├── __root.tsx             head(): meta/OG defaults, noindex default,
+        │                          notFoundComponent, errorComponent (R6/R7)
+        ├── index.tsx              public landing, the only indexable route (R7)
         ├── login.tsx              Google sign-in, sanitised ?next= (open-redirect guard)
         ├── projects.tsx           gated; useEffect fetch (§4)
-        ├── $.tsx                  404 splat
+        ├── $.tsx                  splat → throws notFound() → real 404 (R7)
         └── admin/
             ├── route.tsx          layout + tabs
             ├── index.tsx          overview + sync status
             ├── users.tsx          ⭐ grant/revoke access via authClient.admin.*
             └── repos.tsx          feature/hide/reorder/custom description
+
+public/
+└── og.jpg                        1200×630 share-card image (og:image, R7)
 ```
 
 ---

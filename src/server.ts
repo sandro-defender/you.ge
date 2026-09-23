@@ -113,6 +113,31 @@ export default {
 		const url = new URL(cleanRequest.url);
 		const { pathname } = url;
 
+		// ── 0. Crawler files → served here, never reach the router (R7) ────
+		// Without this, /robots.txt falls through to the `$` splat and returns
+		// the (now real) 404 page — valid, but a plain robots.txt is cheaper
+		// for crawlers and keeps the policy next to ACCESS_POLICY, which it
+		// mirrors: the ONLY crawlable surface of this site is `/`.
+		// No third-party deps, no D1 reads — Workers Free friendly.
+		if (pathname === "/robots.txt" || pathname === "/sitemap.xml") {
+			const isSitemap = pathname === "/sitemap.xml";
+			const body = isSitemap
+				? `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://you.ge/</loc></url>\n</urlset>\n`
+				: `User-agent: *\nDisallow: /projects\nDisallow: /admin\nDisallow: /login\nDisallow: /api/\n\nSitemap: https://you.ge/sitemap.xml\n`;
+			return withSecurityHeaders(
+				new Response(body, {
+					headers: {
+						"content-type": isSitemap
+							? "application/xml; charset=utf-8"
+							: "text/plain; charset=utf-8",
+						// These change only at deploy time; an hour of shared
+						// caching is fine and keeps bots cheap.
+						"cache-control": "public, max-age=3600",
+					},
+				}),
+			);
+		}
+
 		// ── 1. API → Hono ───────────────────────────────────────────────────
 		if (pathname === "/api" || pathname.startsWith("/api/")) {
 			const apiRequest = new Request(

@@ -129,6 +129,9 @@ ${hint ? `<p class="hint">${escapeHtml(hint)}</p>\n` : ""}<div class="actions">
 		headers: {
 			"content-type": "text/html; charset=utf-8",
 			"cache-control": "no-store",
+			// Belt-and-braces with the <meta name="robots"> above: the HTTP
+			// header is honoured even if a proxy strips or truncates the HTML.
+			"x-robots-tag": "noindex, nofollow",
 			// Same security-header set the Worker entry applies to page renders
 			// (see PAGE_SECURITY_HEADERS in src/server.ts). Duplicated here
 			// because gate pages are built without going through either Hono's

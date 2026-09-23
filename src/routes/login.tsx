@@ -13,6 +13,9 @@ import { sanitiseNext } from "../lib/next";
  * instead of dumping everyone on the homepage.
  */
 export const Route = createFileRoute("/login")({
+	// robots stays the root's fail-closed noindex (login pages are not worth
+	// indexing); the og defaults also inherit from the root.
+	head: () => ({ meta: [{ title: "Sign in — you.ge" }] }),
 	validateSearch: (search: Record<string, unknown>): { next?: string } => ({
 		next: typeof search.next === "string" ? search.next : undefined,
 	}),
