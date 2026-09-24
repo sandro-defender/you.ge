@@ -1,0 +1,187 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploy you.ge to Cloudflare Workers from CI.
+#
+# Why this exists: the production deploy otherwise requires a machine that can
+# reach BOTH api.cloudflare.com (wrangler) and the repo. This workflow is the
+# supported path when the deploy is driven from GitHub (git push to main, or a
+# manual `gh workflow run deploy.yml` / Actions UI dispatch).
+#
+# One-time setup (owner, Cloudflare + GitHub dashboards — values never go in
+# chat or in the repo):
+#   1. Cloudflare → My Profile → API Tokens → Create Token:
+#        - template "Edit Cloudflare Workers"
+#        - plus Account | D1 | Edit            (migrations + grant-admin)
+#        - plus Zone | Workers Routes | Edit   (the you.ge custom domain)
+#        - Account Resources: your account; Zone Resources: you.ge
+#   2. GitHub → repo Settings → Secrets and variables → Actions:
+#        CLOUDFLARE_API_TOKEN   (the token from step 1)          [required]
+#        CLOUDFLARE_ACCOUNT_ID  (dash.cloudflare.com/<id> in the URL) [required]
+#        BETTER_AUTH_SECRET     (openssl rand -base64 32)        [see below]
+#        GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET                 [see below]
+#        APP_GITHUB_TOKEN       (fine-grained PAT, public repos read-only)
+#   Any of the runtime secrets in step 2 are OPTIONAL here — if omitted, set
+#   them later via `wrangler secret put` or the Cloudflare dashboard (Workers &
+#   Pages → you-ge → Settings → Variables and Secrets). When present, this
+#   workflow pipes them into `wrangler secret put` after each deploy (APP_GITHUB_TOKEN
+#   becomes the GITHUB_TOKEN Worker secret; the name differs because GitHub
+#   reserves `secrets.GITHUB_TOKEN` for the automatic workflow token).
+#
+# Triggers:
+#   - push to main          → safety-check → migrate (idempotent) → build → deploy
+#   - workflow_dispatch     → same, with knobs:
+#        create_db          → FIRST EVER DEPLOY: let scripts/d1-setup.mjs create
+#                             you-ge-main and wire its uuid into wrangler.jsonc
+#                             in the runner workspace. Print the uuid in the
+#                             step summary so it can be pinned into wrangler.jsonc
+#                             and committed (without pinning, the next run's
+#                             safety check refuses: an existing unpinned DB is
+#                             "not provably ours").
+#        migrate            → toggle the migration step (default on)
+#        grant_admin_email  → after deploy, run scripts/grant-admin.mjs for a
+#                             user who has ALREADY signed in once with Google
+#
+# Safety: migration and admin steps run scripts/d1-safety-check.mjs /
+# scripts/grant-admin.mjs first — they refuse any database whose name does not
+# start with the reserved prefix `you-ge` or that carries foreign tables.
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy you.ge
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_db:
+        description: "First-ever deploy: create you-ge-main D1 and wire its id (prints the uuid to pin into wrangler.jsonc)"
+        type: boolean
+        default: false
+      migrate:
+        description: "Apply pending D1 migrations (safety-checked) before deploying"
+        type: boolean
+        default: true
+      grant_admin_email:
+        description: "Optional: after deploy, set this already-signed-in user's role to admin"
+        type: string
+        required: false
+        default: ""
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-you-ge
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Build & deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Missing-secret guard
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::error::Add repository secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (see the header of .github/workflows/deploy.yml)."
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      - name: Guards & typecheck
+        run: |
+          npm run test:next
+          npm run typecheck
+
+      - name: First-deploy D1 setup (optional)
+        if: ${{ inputs.create_db }}
+        run: |
+          npm run d1:setup
+          uuid="$(grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' wrangler.jsonc | head -1 || true)"
+          {
+            echo "## D1 database created/wired in the runner workspace"
+            echo "Pin this into wrangler.jsonc → d1_databases[0].database_id and commit,"
+            echo "otherwise the next run's safety check will refuse an existing unpinned DB:"
+            echo ""
+            echo "\`database_id: ${uuid:-<see d1:setup log>}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "database_id=${uuid:-<see d1:setup log>}"
+
+      - name: D1 safety preflight
+        run: npm run d1:safety
+
+      - name: Apply pending D1 migrations
+        if: ${{ github.event_name == 'push' || inputs.migrate }}
+        run: npm run db:migrate:remote
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy Worker
+        run: npx wrangler deploy -c dist/server/wrangler.json | tee deploy.log
+
+      - name: Sync runtime secrets (optional — only repo secrets that are set)
+        env:
+          BETTER_AUTH_SECRET_V: ${{ secrets.BETTER_AUTH_SECRET }}
+          GOOGLE_CLIENT_ID_V: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET_V: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          APP_GITHUB_TOKEN_V: ${{ secrets.APP_GITHUB_TOKEN }}
+        run: |
+          sync() {
+            if [ -n "${2:-}" ]; then
+              printf '%s' "$2" | npx wrangler secret put "$1" -c dist/server/wrangler.json
+              echo "secret $1 synced"
+            else
+              echo "::notice::repo secret for Worker secret $1 not set — skipping (set it via wrangler secret put or the dashboard)"
+            fi
+          }
+          sync BETTER_AUTH_SECRET  "${BETTER_AUTH_SECRET_V:-}"
+          sync GOOGLE_CLIENT_ID    "${GOOGLE_CLIENT_ID_V:-}"
+          sync GOOGLE_CLIENT_SECRET "${GOOGLE_CLIENT_SECRET_V:-}"
+          sync GITHUB_TOKEN        "${APP_GITHUB_TOKEN_V:-}"
+
+      - name: Health check
+        run: |
+          primary="https://you.ge"
+          fallback="$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1 || true)"
+          for base in "$primary" ${fallback:+"$fallback"}; do
+            ok=""
+            for i in $(seq 1 10); do
+              code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$base/api/health" || true)"
+              if [ "$code" = "200" ]; then ok=1; break; fi
+              sleep 3
+            done
+            if [ -n "$ok" ]; then
+              echo "health OK at $base/api/health"
+              echo "APP_URL=$base" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            echo "no 200 from $base/api/health"
+          done
+          echo "::error::health check failed on $primary and ${fallback:-<no workers.dev URL>}"
+          exit 1
+
+      - name: Sign-in smoke (soft)
+        run: |
+          code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL/api/auth/get-session" || true)"
+          if [ "$code" = "200" ]; then
+            echo "get-session OK"
+          else
+            echo "::warning::/api/auth/get-session returned $code — expected once BETTER_AUTH_SECRET + Google OAuth secrets are set"
+          fi
+
+      - name: Grant admin role (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.grant_admin_email != '' }}
+        env:
+          GRANT_EMAIL: ${{ inputs.grant_admin_email }}
+        run: node scripts/grant-admin.mjs "$GRANT_EMAIL"
