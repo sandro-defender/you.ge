@@ -77,7 +77,7 @@
 		{
 			"binding": "DB",
 			"database_name": "you-ge-main",
-			"database_id": "REPLACE_WITH_D1_DATABASE_ID",
+			"database_id": "c216526a-926d-48fb-96cb-e54b3bf46735",
 			// Point wrangler at the folder drizzle-kit writes to. Without this it
 			// defaults to ./migrations, finds nothing, and silently reports "no
 			// migrations to apply" — which looks like success while leaving the
