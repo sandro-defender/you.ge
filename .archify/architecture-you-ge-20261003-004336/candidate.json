@@ -1,0 +1,446 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "you.ge Runtime Architecture",
+    "locale": "en",
+    "output": ".archify/architecture-you-ge-20261003-004336/you-ge.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/sandro-defender/you.ge.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "3fc68383f9b799a712b5c7f2d87efff5525948e1"
+    },
+    "views": [
+      {
+        "id": "request-routing",
+        "label": "Request routing",
+        "focus": [
+          "browser",
+          "worker",
+          "ssr",
+          "api"
+        ],
+        "note": "One Worker routes pages to SSR and /api/* requests to Hono."
+      },
+      {
+        "id": "auth-access",
+        "label": "Auth & access",
+        "focus": [
+          "worker",
+          "api",
+          "auth",
+          "google",
+          "database"
+        ],
+        "note": "Google sign-in; page and API guards enforce roles."
+      },
+      {
+        "id": "github-sync",
+        "label": "GitHub sync",
+        "focus": [
+          "cron",
+          "worker",
+          "sync",
+          "github",
+          "database"
+        ],
+        "note": "A six-hour schedule refreshes the project snapshot in D1."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "browser",
+      "type": "frontend",
+      "label": "Browser client",
+      "sublabel": "public + gated project UI",
+      "sources": [
+        {
+          "path": "src/routes/index.tsx",
+          "line": 8,
+          "end_line": 34,
+          "label": "Public landing"
+        },
+        {
+          "path": "src/routes/projects.tsx",
+          "line": 14,
+          "end_line": 26,
+          "label": "Project UI"
+        },
+        {
+          "path": "src/lib/use-api.ts",
+          "line": 30,
+          "end_line": 40,
+          "label": "Client fetch"
+        }
+      ],
+      "pos": [
+        40,
+        270
+      ],
+      "size": [
+        160,
+        84
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "cloud",
+      "label": "Worker entry",
+      "sublabel": "Cloudflare · route + gate",
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 99,
+          "end_line": 162,
+          "label": "Access policy & routing"
+        },
+        {
+          "path": "src/server.ts",
+          "line": 184,
+          "end_line": 230,
+          "label": "Role gate & SSR"
+        },
+        {
+          "path": "src/server.ts",
+          "line": 247,
+          "end_line": 253,
+          "label": "Scheduled handler"
+        }
+      ],
+      "pos": [
+        330,
+        270
+      ],
+      "size": [
+        190,
+        98
+      ]
+    },
+    {
+      "id": "ssr",
+      "type": "backend",
+      "label": "TanStack Start",
+      "sublabel": "server-rendered pages",
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 210,
+          "end_line": 230,
+          "label": "SSR dispatch"
+        }
+      ],
+      "pos": [
+        615,
+        380
+      ],
+      "size": [
+        200,
+        88
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "Hono API",
+      "sublabel": "/api/* · auth · projects · admin",
+      "sources": [
+        {
+          "path": "src/server/app.ts",
+          "line": 21,
+          "end_line": 48,
+          "label": "Routes & middleware"
+        },
+        {
+          "path": "src/server/auth-routes.ts",
+          "line": 28,
+          "end_line": 47,
+          "label": "Auth handler"
+        },
+        {
+          "path": "src/server/guard.ts",
+          "line": 12,
+          "end_line": 80,
+          "label": "Session & role guards"
+        }
+      ],
+      "pos": [
+        615,
+        60
+      ],
+      "size": [
+        200,
+        94
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "Better Auth",
+      "sublabel": "Google OAuth · roles · sessions",
+      "sources": [
+        {
+          "path": "src/lib/auth.ts",
+          "line": 31,
+          "end_line": 70,
+          "label": "Auth & provider setup"
+        },
+        {
+          "path": "src/lib/auth.ts",
+          "line": 82,
+          "end_line": 126,
+          "label": "Sessions & admin roles"
+        },
+        {
+          "path": "src/server/context.ts",
+          "line": 23,
+          "end_line": 28,
+          "label": "Per-request services"
+        }
+      ],
+      "pos": [
+        980,
+        60
+      ],
+      "size": [
+        210,
+        96
+      ]
+    },
+    {
+      "id": "google",
+      "type": "external",
+      "label": "Google OAuth",
+      "sublabel": "sign-in provider",
+      "sources": [
+        {
+          "path": "src/lib/auth.ts",
+          "line": 58,
+          "end_line": 70,
+          "label": "Google provider"
+        }
+      ],
+      "pos": [
+        1270,
+        60
+      ],
+      "size": [
+        160,
+        80
+      ]
+    },
+    {
+      "id": "database",
+      "type": "database",
+      "label": "Cloudflare D1",
+      "sublabel": "DB binding · Drizzle ORM",
+      "sources": [
+        {
+          "path": "src/lib/db.ts",
+          "line": 17,
+          "end_line": 19,
+          "label": "D1 adapter"
+        },
+        {
+          "path": "wrangler.jsonc",
+          "line": 76,
+          "end_line": 85,
+          "label": "DB binding"
+        },
+        {
+          "path": "src/server/repos-router.ts",
+          "line": 10,
+          "end_line": 23,
+          "label": "Project reads"
+        }
+      ],
+      "pos": [
+        980,
+        320
+      ],
+      "size": [
+        210,
+        96
+      ]
+    },
+    {
+      "id": "cron",
+      "type": "cloud",
+      "label": "Cron trigger",
+      "sublabel": "0 */6 * * *",
+      "sources": [
+        {
+          "path": "wrangler.jsonc",
+          "line": 104,
+          "end_line": 110,
+          "label": "Schedule & sync config"
+        }
+      ],
+      "pos": [
+        40,
+        610
+      ],
+      "size": [
+        160,
+        76
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "GitHub sync",
+      "sublabel": "fetch · score · D1 upsert",
+      "sources": [
+        {
+          "path": "src/server.ts",
+          "line": 247,
+          "end_line": 253,
+          "label": "Cron invocation"
+        },
+        {
+          "path": "src/server/github-sync.ts",
+          "line": 194,
+          "end_line": 213,
+          "label": "Fetch repositories"
+        },
+        {
+          "path": "src/server/github-sync.ts",
+          "line": 256,
+          "end_line": 315,
+          "label": "D1 upsert"
+        }
+      ],
+      "pos": [
+        330,
+        610
+      ],
+      "size": [
+        190,
+        96
+      ]
+    },
+    {
+      "id": "github",
+      "type": "external",
+      "label": "GitHub REST API",
+      "sublabel": "user/repos endpoint",
+      "sources": [
+        {
+          "path": "src/server/github-sync.ts",
+          "line": 398,
+          "end_line": 418,
+          "label": "GitHub request"
+        }
+      ],
+      "pos": [
+        615,
+        650
+      ],
+      "size": [
+        180,
+        76
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "browser-to-worker",
+      "from": "browser",
+      "to": "worker",
+      "label": "HTTPS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-to-ssr",
+      "from": "worker",
+      "to": "ssr",
+      "label": "public / authorized pages",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-to-api",
+      "from": "worker",
+      "to": "api",
+      "label": "/api/*"
+    },
+    {
+      "id": "worker-to-auth",
+      "from": "worker",
+      "to": "auth",
+      "label": "page session check",
+      "variant": "security"
+    },
+    {
+      "id": "api-to-auth",
+      "from": "api",
+      "to": "auth",
+      "label": "auth + API sessions",
+      "variant": "security"
+    },
+    {
+      "id": "api-to-database",
+      "from": "api",
+      "to": "database",
+      "label": "repo / admin data"
+    },
+    {
+      "id": "auth-to-database",
+      "from": "auth",
+      "to": "database",
+      "label": "user / session data"
+    },
+    {
+      "id": "auth-to-google",
+      "from": "auth",
+      "to": "google",
+      "label": "OAuth"
+    },
+    {
+      "id": "cron-to-worker",
+      "from": "cron",
+      "to": "worker",
+      "label": "scheduled event",
+      "variant": "dashed"
+    },
+    {
+      "id": "worker-to-sync",
+      "from": "worker",
+      "to": "sync",
+      "label": "syncGithubRepos"
+    },
+    {
+      "id": "sync-to-github",
+      "from": "sync",
+      "to": "github",
+      "label": "REST fetch"
+    },
+    {
+      "id": "sync-to-database",
+      "from": "sync",
+      "to": "database",
+      "label": "repo metadata upsert",
+      "route": "straight"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Access model",
+      "items": [
+        "The Worker checks gated page roles before TanStack Start renders protected HTML.",
+        "/projects requires member or admin; /admin requires admin.",
+        "Hono separately enforces session, member, and admin API guards."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Project data",
+      "items": [
+        "The browser fetches /api/projects; Hono reads project rows from D1.",
+        "Cloudflare Cron runs every six hours; sync fetches GitHub repositories and upserts metadata to D1."
+      ]
+    }
+  ]
+}
