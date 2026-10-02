@@ -1,5 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { repos, syncLog } from "../db/schema";
+import { chunkItems } from "../lib/chunk-items";
 import type { Database } from "../lib/db";
 import type { Env } from "../lib/env";
 
@@ -21,8 +22,8 @@ import type { Env } from "../lib/env";
  * ── D1 WRITE BUDGET ─────────────────────────────────────────────────────────
  * Workers Free allows 100k rows written/day, hard-failing past that. One sync
  * writes ~1 row per repo plus 1 sync_log row. At 100 repos x 4 runs/day that is
- * ~400 writes/day — 0.4% of the budget. The upsert below is a SINGLE multi-row
- * statement, not a loop of inserts, which keeps that number down.
+ * ~400 writes/day — 0.4% of the budget. Upserts use small multi-row batches so
+ * a user with many repositories stays below D1's SQL parameter limit.
  */
 
 /** Skip a sync if one succeeded this recently. Guards against hammering GitHub
@@ -30,6 +31,7 @@ import type { Env } from "../lib/env";
 const MIN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 const PER_PAGE = 100; // GitHub's maximum
+const UPSERT_BATCH_SIZE = 5;
 
 type GitHubRepo = {
 	id: number;
@@ -135,57 +137,57 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 	}
 
 	// ── Upsert ──────────────────────────────────────────────────────────────
-	// ONE multi-row statement, verified to emit:
-	//   insert into "repos" (...) values (?,...), (?,...)
-	//   on conflict ("repos"."slug") do update set ... where ...
+	// Small multi-row statements avoid D1's SQL parameter limit. Keeping each
+	// batch at five rows leaves plenty of headroom for all repository columns.
 	try {
 		const now = new Date();
-
-		await db
-			.insert(repos)
-			.values(
-				safeRepos.map((repo) => ({
-					id: repo.id,
-					owner: repo.owner?.login ?? username,
-					name: repo.name,
-					slug: repo.full_name,
-					description: repo.description,
-					homepage: repo.homepage,
-					url: repo.html_url,
-					language: repo.language,
-					stars: repo.stargazers_count ?? 0,
-					forks: repo.forks_count ?? 0,
-					openIssues: repo.open_issues_count ?? 0,
-					topics: JSON.stringify(repo.topics ?? []),
-					githubPushedAt: repo.pushed_at ? new Date(repo.pushed_at) : null,
-					githubCreatedAt: repo.created_at ? new Date(repo.created_at) : null,
-					lastSyncedAt: now,
-					//featured / hidden / sortOrder / customDescription are
-					// intentionally absent: they fall back to their column
-					// defaults on first insert and are never touched on update.
-				})),
-			)
-			.onConflictDoUpdate({
-				target: repos.id,
-				set: {
-					// Only GitHub-owned columns. Curation columns are excluded so
-					// that featuring, hiding, reordering, or overriding a
-					// description survives every sync forever.
-					owner: sql`excluded.owner`,
-					name: sql`excluded.name`,
-					description: sql`excluded.description`,
-					homepage: sql`excluded.homepage`,
-					url: sql`excluded.url`,
-					language: sql`excluded.language`,
-					stars: sql`excluded.stars`,
-					forks: sql`excluded.forks`,
-					openIssues: sql`excluded.open_issues`,
-					topics: sql`excluded.topics`,
-					githubPushedAt: sql`excluded.github_pushed_at`,
-					githubCreatedAt: sql`excluded.github_created_at`,
-					lastSyncedAt: sql`excluded.last_synced_at`,
-				},
-			});
+		for (const batch of chunkItems(safeRepos, UPSERT_BATCH_SIZE)) {
+			await db
+				.insert(repos)
+				.values(
+					batch.map((repo) => ({
+						id: repo.id,
+						owner: repo.owner?.login ?? username,
+						name: repo.name,
+						slug: repo.full_name,
+						description: repo.description,
+						homepage: repo.homepage,
+						url: repo.html_url,
+						language: repo.language,
+						stars: repo.stargazers_count ?? 0,
+						forks: repo.forks_count ?? 0,
+						openIssues: repo.open_issues_count ?? 0,
+						topics: JSON.stringify(repo.topics ?? []),
+						githubPushedAt: repo.pushed_at ? new Date(repo.pushed_at) : null,
+						githubCreatedAt: repo.created_at ? new Date(repo.created_at) : null,
+						lastSyncedAt: now,
+						//featured / hidden / sortOrder / customDescription are
+						// intentionally absent: they fall back to their column
+						// defaults on first insert and are never touched on update.
+					})),
+				)
+				.onConflictDoUpdate({
+					target: repos.id,
+					set: {
+						// Only GitHub-owned columns. Curation columns are excluded so
+						// that featuring, hiding, reordering, or overriding a
+						// description survives every sync forever.
+						owner: sql`excluded.owner`,
+						name: sql`excluded.name`,
+						description: sql`excluded.description`,
+						homepage: sql`excluded.homepage`,
+						url: sql`excluded.url`,
+						language: sql`excluded.language`,
+						stars: sql`excluded.stars`,
+						forks: sql`excluded.forks`,
+						openIssues: sql`excluded.open_issues`,
+						topics: sql`excluded.topics`,
+						githubPushedAt: sql`excluded.github_pushed_at`,
+						githubCreatedAt: sql`excluded.github_created_at`,
+						lastSyncedAt: sql`excluded.last_synced_at`,
+					},
+				});
+		}
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		console.error("[github-sync] upsert failed:", message);
