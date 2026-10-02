@@ -1,37 +1,31 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { repos, syncLog } from "../db/schema";
-import { chunkItems } from "../lib/chunk-items";
+import { scoreRepository, resolveFeaturedProjectIds } from "../lib/repo-ranking";
 import type { Database } from "../lib/db";
 import type { Env } from "../lib/env";
+import { chunkItems } from "../lib/chunk-items";
+import { notifyAdmins, writeAudit } from "./audit";
+import { stringifyStringArray } from "./project-data";
 
-/**
- * GitHub → D1 synchronisation.
- *
- * ── WHY THIS IS A CRON JOB AND NOT A PAGE REQUEST ───────────────────────────
- * GitHub allows 60 unauthenticated requests/hour/IP and 5,000/hour for a PAT.
- * Cloudflare's egress IPs are shared, so the unauthenticated budget is
- * effectively unusable from a Worker. Fetching repos during a page request
- * would therefore break the portfolio within an hour of real traffic.
- *
- * Instead `scheduled()` runs every 6 hours (see wrangler.jsonc "triggers"),
- * writes the repos into D1, and every page reads only D1. Scheduled
- * invocations are FREE and do not count toward the 100k requests/day Workers
- * Free allowance. Cron triggers are Workers-only — Cloudflare Pages cannot do
- * this at all, which is a concrete reason this app is on Workers.
- *
- * ── D1 WRITE BUDGET ─────────────────────────────────────────────────────────
- * Workers Free allows 100k rows written/day, hard-failing past that. One sync
- * writes ~1 row per repo plus 1 sync_log row. At 100 repos x 4 runs/day that is
- * ~400 writes/day — 0.4% of the budget. Upserts use small multi-row batches so
- * a user with many repositories stays below D1's SQL parameter limit.
- */
-
-/** Skip a sync if one succeeded this recently. Guards against hammering GitHub
- *  when the admin "sync now" button is clicked repeatedly. */
-const MIN_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
-
-const PER_PAGE = 100; // GitHub's maximum
+const MIN_INTERVAL_MS = 60 * 60 * 1000;
+const RUNNING_TIMEOUT_MS = 15 * 60 * 1000;
+const PER_PAGE = 100;
+const MAX_PAGES = 5;
 const UPSERT_BATCH_SIZE = 5;
+
+export type SyncTrigger = "cron" | "manual";
+
+type SyncActor = {
+	id?: string | null;
+	name?: string | null;
+	email?: string | null;
+};
+
+type SyncOptions = {
+	trigger?: SyncTrigger;
+	actor?: SyncActor | null;
+	force?: boolean;
+};
 
 type GitHubRepo = {
 	id: number;
@@ -51,129 +45,258 @@ type GitHubRepo = {
 	owner?: { login?: string };
 };
 
-export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
-	const startedAt = Date.now();
+type RateLimitSnapshot = {
+	remaining: number | null;
+	limit: number | null;
+	resetAt: Date | null;
+};
 
-	const log = async (
+type Kickoff = {
+	runId: number;
+	started: boolean;
+	message: string;
+	task: Promise<void> | null;
+};
+
+export async function kickoffGithubSync(
+	env: Env,
+	db: Database,
+	options: SyncOptions = {},
+): Promise<Kickoff> {
+	const startedAt = new Date();
+	const trigger = options.trigger ?? "cron";
+
+	const running = await db
+		.select({ id: syncLog.id, runAt: syncLog.runAt })
+		.from(syncLog)
+		.where(eq(syncLog.status, "running"))
+		.orderBy(desc(syncLog.runAt))
+		.limit(1);
+	const activeRun = running[0];
+	if (
+		activeRun &&
+		startedAt.getTime() - activeRun.runAt.getTime() < RUNNING_TIMEOUT_MS
+	) {
+		return {
+			runId: activeRun.id,
+			started: false,
+			message: "A GitHub sync is already running.",
+			task: null,
+		};
+	}
+
+	const inserted = await db
+		.insert(syncLog)
+		.values({
+			runAt: startedAt,
+			status: "running",
+			trigger,
+			repoCount: 0,
+			discoveredCount: 0,
+			durationMs: 0,
+			message: "Preparing GitHub sync…",
+		})
+		.returning({ id: syncLog.id });
+	const runId = inserted[0]?.id ?? 0;
+
+	return {
+		runId,
+		started: true,
+		message: "GitHub sync started.",
+		task: runGithubSync(env, db, runId, { ...options, trigger }),
+	};
+}
+
+export async function syncGithubRepos(
+	env: Env,
+	db: Database,
+	options: SyncOptions = {},
+): Promise<number> {
+	const kickoff = await kickoffGithubSync(env, db, options);
+	if (kickoff.task) await kickoff.task;
+	return kickoff.runId;
+}
+
+async function runGithubSync(
+	env: Env,
+	db: Database,
+	runId: number,
+	options: SyncOptions,
+): Promise<void> {
+	const startedAt = Date.now();
+	const trigger = options.trigger ?? "cron";
+
+	const finish = async (
 		status: "ok" | "error" | "skipped",
-		repoCount: number,
-		message?: string,
+		fields: {
+			repoCount?: number;
+			discoveredCount?: number;
+			message?: string | null;
+			rate?: RateLimitSnapshot;
+		},
 	) => {
-		// Best-effort: a failure to write the audit row must not mask the real
-		// outcome of the sync.
-		try {
-			await db.insert(syncLog).values({
-				runAt: new Date(startedAt),
+		await db
+			.update(syncLog)
+			.set({
 				status,
-				repoCount,
+				repoCount: fields.repoCount ?? 0,
+				discoveredCount: fields.discoveredCount ?? 0,
 				durationMs: Date.now() - startedAt,
-				message: message ?? null,
-			});
-		} catch {
-			/* ignore */
-		}
+				message: fields.message ?? null,
+				rateLimitRemaining: fields.rate?.remaining ?? null,
+				rateLimitLimit: fields.rate?.limit ?? null,
+				rateLimitResetAt: fields.rate?.resetAt ?? null,
+			})
+			.where(eq(syncLog.id, runId));
+	};
+
+	const pulse = async (message: string, rate?: RateLimitSnapshot) => {
+		await db
+			.update(syncLog)
+			.set({
+				message,
+				durationMs: Date.now() - startedAt,
+				rateLimitRemaining: rate?.remaining ?? null,
+				rateLimitLimit: rate?.limit ?? null,
+				rateLimitResetAt: rate?.resetAt ?? null,
+			})
+			.where(eq(syncLog.id, runId));
 	};
 
 	const username = env.GITHUB_USERNAME?.trim();
 	if (!username) {
-		console.warn("[github-sync] GITHUB_USERNAME not set — skipping.");
-		await log("skipped", 0, "GITHUB_USERNAME is not configured");
+		await finish("skipped", {
+			message: "GITHUB_USERNAME is not configured.",
+		});
 		return;
 	}
 
-	// ── Throttle ────────────────────────────────────────────────────────────
-	const lastRun = await db
-		.select({ runAt: syncLog.runAt })
-		.from(syncLog)
-		.where(eq(syncLog.status, "ok"))
-		.orderBy(desc(syncLog.runAt))
-		.limit(1);
-
-	const lastRunAt = lastRun[0]?.runAt?.getTime() ?? 0;
-	if (Date.now() - lastRunAt < MIN_INTERVAL_MS) {
-		const waitMins = Math.ceil(
-			(MIN_INTERVAL_MS - (Date.now() - lastRunAt)) / 60_000,
-		);
-		await log("skipped", 0, `Last successful sync was under an hour ago; retry in ~${waitMins}m`);
-		return;
+	if (!options.force) {
+		const lastRun = await db
+			.select({ runAt: syncLog.runAt })
+			.from(syncLog)
+			.where(eq(syncLog.status, "ok"))
+			.orderBy(desc(syncLog.runAt))
+			.limit(1);
+		const lastRunAt = lastRun[0]?.runAt?.getTime() ?? 0;
+		if (Date.now() - lastRunAt < MIN_INTERVAL_MS) {
+			const waitMins = Math.ceil((MIN_INTERVAL_MS - (Date.now() - lastRunAt)) / 60_000);
+			await finish("skipped", {
+				message: `Last successful sync was under an hour ago; retry in ~${waitMins}m.`,
+			});
+			return;
+		}
 	}
 
-	// ── Fetch ───────────────────────────────────────────────────────────────
-	let fetched: GitHubRepo[];
+	let fetched: GitHubRepo[] = [];
+	let rate: RateLimitSnapshot = { remaining: null, limit: null, resetAt: null };
+
 	try {
-		fetched = await fetchRepos(username, env.GITHUB_TOKEN);
+		await pulse("Fetching repositories from GitHub…");
+		const result = await fetchRepos(username, env.GITHUB_TOKEN, (message, latestRate) =>
+			pulse(message, latestRate),
+		);
+		fetched = result.repos;
+		rate = result.rate;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		console.error("[github-sync] fetch failed:", message);
-		await log("error", 0, message.slice(0, 500));
+		await finish("error", { message: message.slice(0, 500), rate });
+		await notifyAdmins(db, {
+			kind: "sync-failure",
+			level: "error",
+			title: "GitHub sync failed",
+			message: message.slice(0, 220),
+			link: "/admin",
+			metadata: { runId, trigger },
+		});
 		return;
 	}
 
-	// Archived repositories are not portfolio projects. Filtering them here also
-	// prevents an archive/unarchive cycle from changing curation unexpectedly.
-	const active = fetched.filter((repo) => repo.archived !== true);
+	const active = uniqueById(fetched.filter((repo) => repo.archived !== true));
 	if (active.length === 0) {
-		await log("ok", 0, fetched.length === 0 ? "GitHub returned no public repos" : "GitHub returned only archived repos");
+		await finish("ok", {
+			repoCount: 0,
+			discoveredCount: 0,
+			message:
+				fetched.length === 0
+					? "GitHub returned no public repositories."
+					: "GitHub returned only archived repositories.",
+			rate,
+		});
 		return;
 	}
 
-	// A rename changes the slug but not GitHub's stable numeric id. Upsert by id
-	// so the row follows a rename instead of creating a duplicate. If the new
-	// slug is already owned by another row, skip that one repo rather than
-	// aborting the whole batch (the conflict remains visible in sync_log).
-	const existing = await db.select({ id: repos.id, slug: repos.slug }).from(repos);
+	const existing = await db
+		.select({
+			id: repos.id,
+			slug: repos.slug,
+			manualPriority: repos.manualPriority,
+		})
+		.from(repos);
 	const ownerBySlug = new Map(existing.map((row) => [row.slug, row.id]));
+	const priorityById = new Map(existing.map((row) => [row.id, row.manualPriority]));
+	const existingIds = new Set(existing.map((row) => row.id));
+
 	const conflicts = active.filter((repo) => {
 		const owner = ownerBySlug.get(repo.full_name);
 		return owner !== undefined && owner !== repo.id;
 	});
 	const safeRepos = active.filter((repo) => !conflicts.includes(repo));
-	if (conflicts.length > 0) {
-		console.warn(`[github-sync] skipped ${conflicts.length} renamed repo slug conflict(s)`);
-	}
 	if (safeRepos.length === 0) {
-		await log("error", 0, `Skipped ${conflicts.length} repo(s): renamed slug already exists`);
+		await finish("error", {
+			message: `Skipped ${conflicts.length} repositories: renamed slug already exists.`,
+			rate,
+		});
 		return;
 	}
 
-	// ── Upsert ──────────────────────────────────────────────────────────────
-	// Small multi-row statements avoid D1's SQL parameter limit. Keeping each
-	// batch at five rows leaves plenty of headroom for all repository columns.
+	const discovered = safeRepos.filter((repo) => !existingIds.has(repo.id));
+
 	try {
+		await pulse(`Writing ${safeRepos.length} repositories to D1…`, rate);
 		const now = new Date();
 		for (const batch of chunkItems(safeRepos, UPSERT_BATCH_SIZE)) {
 			await db
 				.insert(repos)
 				.values(
-					batch.map((repo) => ({
-						id: repo.id,
-						owner: repo.owner?.login ?? username,
-						name: repo.name,
-						slug: repo.full_name,
-						description: repo.description,
-						homepage: repo.homepage,
-						url: repo.html_url,
-						language: repo.language,
-						stars: repo.stargazers_count ?? 0,
-						forks: repo.forks_count ?? 0,
-						openIssues: repo.open_issues_count ?? 0,
-						topics: JSON.stringify(repo.topics ?? []),
-						githubPushedAt: repo.pushed_at ? new Date(repo.pushed_at) : null,
-						githubCreatedAt: repo.created_at ? new Date(repo.created_at) : null,
-						lastSyncedAt: now,
-						//featured / hidden / sortOrder / customDescription are
-						// intentionally absent: they fall back to their column
-						// defaults on first insert and are never touched on update.
-					})),
+					batch.map((repo) => {
+						const breakdown = scoreRepository({
+							description: repo.description,
+							homepage: normaliseHomepage(repo.homepage),
+							language: repo.language,
+							stars: repo.stargazers_count ?? 0,
+							topics: repo.topics ?? [],
+							githubPushedAt: repo.pushed_at ? new Date(repo.pushed_at) : null,
+							manualPriority: priorityById.get(repo.id) ?? 0,
+						});
+						return {
+							id: repo.id,
+							owner: repo.owner?.login ?? username,
+							name: repo.name,
+							slug: repo.full_name,
+							description: repo.description,
+							homepage: normaliseHomepage(repo.homepage),
+							url: repo.html_url,
+							language: repo.language,
+							stars: repo.stargazers_count ?? 0,
+							forks: repo.forks_count ?? 0,
+							openIssues: repo.open_issues_count ?? 0,
+							topics: stringifyStringArray(repo.topics ?? []),
+							score: breakdown.total,
+							scoreBreakdown: JSON.stringify(breakdown),
+							githubPushedAt: repo.pushed_at ? new Date(repo.pushed_at) : null,
+							githubCreatedAt: repo.created_at ? new Date(repo.created_at) : null,
+							lastSyncedAt: now,
+						};
+					}),
 				)
 				.onConflictDoUpdate({
 					target: repos.id,
 					set: {
-						// Only GitHub-owned columns. Curation columns are excluded so
-						// that featuring, hiding, reordering, or overriding a
-						// description survives every sync forever.
 						owner: sql`excluded.owner`,
 						name: sql`excluded.name`,
+						slug: sql`excluded.slug`,
 						description: sql`excluded.description`,
 						homepage: sql`excluded.homepage`,
 						url: sql`excluded.url`,
@@ -182,6 +305,8 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 						forks: sql`excluded.forks`,
 						openIssues: sql`excluded.open_issues`,
 						topics: sql`excluded.topics`,
+						score: sql`excluded.score`,
+						scoreBreakdown: sql`excluded.score_breakdown`,
 						githubPushedAt: sql`excluded.github_pushed_at`,
 						githubCreatedAt: sql`excluded.github_created_at`,
 						lastSyncedAt: sql`excluded.last_synced_at`,
@@ -191,58 +316,154 @@ export async function syncGithubRepos(env: Env, db: Database): Promise<void> {
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		console.error("[github-sync] upsert failed:", message);
-		await log("error", safeRepos.length, message.slice(0, 500));
+		await finish("error", {
+			repoCount: safeRepos.length,
+			discoveredCount: discovered.length,
+			message: message.slice(0, 500),
+			rate,
+		});
+		await notifyAdmins(db, {
+			kind: "sync-failure",
+			level: "error",
+			title: "GitHub sync failed while saving",
+			message: message.slice(0, 220),
+			link: "/admin",
+			metadata: { runId, trigger },
+		});
 		return;
 	}
 
-	const suffix = conflicts.length > 0 ? `; skipped ${conflicts.length} slug conflict(s)` : "";
-	await log("ok", safeRepos.length, `Synced ${safeRepos.length} repos for ${username}${suffix}`);
-	console.log(`[github-sync] synced ${safeRepos.length} repos in ${Date.now() - startedAt}ms`);
+	await refreshFeaturedFlags(db);
+
+	const conflictSuffix = conflicts.length > 0 ? ` Skipped ${conflicts.length} slug conflict(s).` : "";
+	const discoverySuffix =
+		discovered.length > 0 ? ` Discovered ${discovered.length} new repositories.` : "";
+	const rateSuffix =
+		rate.remaining !== null && rate.limit !== null
+			? ` Rate limit: ${rate.remaining}/${rate.limit} remaining.`
+			: "";
+	const message = `Synced ${safeRepos.length} repositories for ${username}.${discoverySuffix}${conflictSuffix}${rateSuffix}`.trim();
+
+	await finish("ok", {
+		repoCount: safeRepos.length,
+		discoveredCount: discovered.length,
+		message,
+		rate,
+	});
+
+	if (options.actor?.id) {
+		await writeAudit(db, {
+			action: "sync.completed",
+			entityType: "sync",
+			entityId: String(runId),
+			summary: `${options.actor.email ?? options.actor.name ?? "An admin"} ran a manual GitHub sync.`,
+			metadata: { repoCount: safeRepos.length, discoveredCount: discovered.length },
+			actor: options.actor,
+		});
+	}
+
+	if (discovered.length > 0) {
+		await notifyAdmins(db, {
+			kind: "repo-discovery",
+			level: "success",
+			title: `${discovered.length} new repos discovered`,
+			message: discovered.slice(0, 4).map((repo) => repo.name).join(", "),
+			link: "/admin/repos",
+			metadata: { repos: discovered.map((repo) => repo.full_name) },
+		});
+	}
 }
 
-/**
- * Fetch public repos, newest activity first.
- *
- * Only the first page (100 repos) is fetched — ample for a portfolio. If you
- * ever exceed it, this is the function to add pagination to; `Link` header
- * parsing is the standard approach.
- */
+export async function refreshFeaturedFlags(db: Database): Promise<void> {
+	const rows = await db
+		.select({
+			id: repos.id,
+			hidden: repos.hidden,
+			featuredOverride: repos.featuredOverride,
+			score: repos.score,
+			sortOrder: repos.sortOrder,
+			stars: repos.stars,
+			githubPushedAt: repos.githubPushedAt,
+			featured: repos.featured,
+		})
+		.from(repos);
+	const featuredIds = resolveFeaturedProjectIds(rows);
+	for (const row of rows) {
+		const next = featuredIds.has(row.id);
+		if (row.featured === next) continue;
+		await db.update(repos).set({ featured: next }).where(eq(repos.id, row.id));
+	}
+}
+
 async function fetchRepos(
 	username: string,
 	token: string | undefined,
-): Promise<GitHubRepo[]> {
-	const url =
-		`https://api.github.com/users/${encodeURIComponent(username)}/repos` +
-		`?per_page=${PER_PAGE}&sort=pushed&direction=desc&type=owner`;
+	onProgress?: (message: string, rate: RateLimitSnapshot) => Promise<void> | void,
+): Promise<{ repos: GitHubRepo[]; rate: RateLimitSnapshot }> {
+	const collected: GitHubRepo[] = [];
+	let latestRate: RateLimitSnapshot = { remaining: null, limit: null, resetAt: null };
 
-	const res = await fetch(url, {
-		headers: {
-			Accept: "application/vnd.github+json",
-			"X-GitHub-Api-Version": "2022-11-28",
-			"User-Agent": "you-ge-main-worker",
-			...(token ? { Authorization: `Bearer ${token}` } : {}),
-		},
-	});
+	for (let page = 1; page <= MAX_PAGES; page += 1) {
+		const url =
+			`https://api.github.com/users/${encodeURIComponent(username)}/repos` +
+			`?per_page=${PER_PAGE}&sort=pushed&direction=desc&type=owner&page=${page}`;
 
-	if (!res.ok) {
-		// GitHub always sends these. Surfacing them in the message is what makes
-		// a 403 diagnosable from the sync log alone, instead of guessing whether
-		// it was a bad token or an exhausted rate limit.
-		const details: string[] = [];
-		const remaining = res.headers.get("x-ratelimit-remaining");
-		const reset = res.headers.get("x-ratelimit-reset");
-		if (remaining !== null) details.push(`rate limit remaining: ${remaining}`);
-		if (reset !== null) {
-			details.push(`resets ${new Date(Number(reset) * 1000).toISOString()}`);
+		const res = await fetch(url, {
+			headers: {
+				Accept: "application/vnd.github+json",
+				"X-GitHub-Api-Version": "2022-11-28",
+				"User-Agent": "you-ge-main-worker",
+				...(token ? { Authorization: `Bearer ${token}` } : {}),
+			},
+		});
+
+		latestRate = extractRateLimit(res.headers);
+		await onProgress?.(`Fetching GitHub page ${page}…`, latestRate);
+
+		if (!res.ok) {
+			const details: string[] = [];
+			if (latestRate.remaining !== null) details.push(`rate limit remaining: ${latestRate.remaining}`);
+			if (latestRate.resetAt) details.push(`resets ${latestRate.resetAt.toISOString()}`);
+			const suffix = details.length > 0 ? ` (${details.join(", ")})` : "";
+			throw new Error(`GitHub API ${res.status} ${res.statusText}${suffix}`);
 		}
 
-		const suffix = details.length > 0 ? ` (${details.join(", ")})` : "";
-		throw new Error(`GitHub API ${res.status} ${res.statusText}${suffix}`);
+		const data: unknown = await res.json();
+		if (!Array.isArray(data)) {
+			throw new Error("GitHub API returned a non-array payload");
+		}
+
+		const pageItems = data as GitHubRepo[];
+		collected.push(...pageItems);
+		if (pageItems.length < PER_PAGE) break;
 	}
 
-	const data: unknown = await res.json();
-	if (!Array.isArray(data)) {
-		throw new Error("GitHub API returned a non-array payload");
-	}
-	return data as GitHubRepo[];
+	return { repos: collected, rate: latestRate };
+}
+
+function extractRateLimit(headers: Headers): RateLimitSnapshot {
+	const remaining = headers.get("x-ratelimit-remaining");
+	const limit = headers.get("x-ratelimit-limit");
+	const reset = headers.get("x-ratelimit-reset");
+	return {
+		remaining: remaining === null ? null : Number(remaining),
+		limit: limit === null ? null : Number(limit),
+		resetAt: reset === null ? null : new Date(Number(reset) * 1000),
+	};
+}
+
+function uniqueById(items: GitHubRepo[]): GitHubRepo[] {
+	const seen = new Set<number>();
+	return items.filter((item) => {
+		if (seen.has(item.id)) return false;
+		seen.add(item.id);
+		return true;
+	});
+}
+
+function normaliseHomepage(value: string | null): string | null {
+	const trimmed = value?.trim();
+	if (!trimmed) return null;
+	if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed;
+	return `https://${trimmed}`;
 }

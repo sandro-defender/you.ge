@@ -1,120 +1,188 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useApi } from "../../lib/use-api";
 import { SyncNowButton } from "../../components/SyncNowButton";
-import type { SyncRun } from "../../lib/types";
+import type { AdminOverview, AuditEntry, NotificationItem } from "../../lib/types";
+import { useApi } from "../../lib/use-api";
 
 export const Route = createFileRoute("/admin/")({
 	component: AdminHome,
 });
 
 function AdminHome() {
-	const { data, loading, error, refetch } = useApi<{ runs: SyncRun[] }>(
-		"/api/admin/sync-log",
-	);
-	const runs = data?.runs ?? [];
-	const latest = runs[0];
+	const { data, loading, error, refetch } = useApi<AdminOverview>("/api/admin/overview");
+	const overview = data;
 
 	return (
-		<div>
-			<div className="grid" style={{ marginBottom: "1.5rem" }}>
-				<AdminCard
-					title="Users & access"
-					body="See who has signed in, grant or revoke the admin role, ban a user, and end their active sessions."
-					to="/admin/users"
-					cta="Manage users"
-				/>
-				<AdminCard
-					title="Projects"
-					body="Feature or hide repositories, reorder them, and override the description shown on the projects page."
-					to="/admin/repos"
-					cta="Manage projects"
-				/>
+		<div className="page-stack admin-page">
+			<div className="spread page-header">
+				<div>
+					<p className="eyebrow">Control room</p>
+					<h2>Portfolio operations at a glance</h2>
+					<p className="muted page-subtitle">
+						See what changed, sync GitHub safely, and spot actions that need
+						attention before they impact the public experience.
+					</p>
+				</div>
+				<div className="row">
+					<SyncNowButton onFinished={refetch} label="Sync now" />
+					<button type="button" className="btn btn-sm" onClick={refetch} disabled={loading}>
+						{loading ? <span className="spinner" /> : "Refresh"}
+					</button>
+				</div>
 			</div>
 
-			<div className="card">
-				<div className="spread" style={{ marginBottom: "0.25rem" }}>
-					<h2 style={{ fontSize: "1.15rem", margin: 0 }}>GitHub sync</h2>
-					<SyncNowButton onFinished={refetch} />
+			{error ? (
+				<div className="glass-panel notice notice-danger" role="alert">
+					{error}
 				</div>
-				<p className="muted" style={{ fontSize: "0.92rem" }}>
-					Runs automatically every 6 hours via a Workers cron trigger. Scheduled
-					invocations are free and do not count against the 100k requests/day
-					allowance.
-				</p>
+			) : null}
 
-				{loading ? (
-					<p className="dim">
-						<span className="spinner" style={{ display: "inline-block", verticalAlign: "middle" }} />{" "}
-						Loading sync history…
-					</p>
-				) : error ? (
-					<div className="notice notice-danger" style={{ marginTop: "0.75rem" }}>
-						{error}
-					</div>
-				) : latest ? (
-					<div className="row" style={{ marginTop: "0.75rem" }}>
-						<StatusBadge status={latest.status} />
-						<span className="dim">
-							{formatDate(latest.runAt)} · {latest.repoCount} repos ·{" "}
-							{latest.durationMs}ms
-						</span>
-					</div>
-				) : (
-					<p className="dim" style={{ marginTop: "0.75rem" }}>
-						No syncs recorded yet. The cron has not fired, or the database was
-						just created.
-					</p>
-				)}
+			<div className="stats-grid">
+				<DashboardStat label="Repositories" value={String(overview?.totals.repositories ?? "—")} />
+				<DashboardStat label="Featured" value={String(overview?.totals.featured ?? "—")} />
+				<DashboardStat label="Hidden" value={String(overview?.totals.hidden ?? "—")} />
+				<DashboardStat label="Active users" value={String(overview?.totals.activeUsers ?? "—")} />
+				<DashboardStat label="Pending actions" value={String(overview?.totals.pendingActions ?? "—")} />
+				<DashboardStat label="Failed syncs" value={String(overview?.totals.failedSyncs ?? "—")} />
+			</div>
 
-				{latest?.message ? (
-					<p className="dim" style={{ margin: "0.5rem 0 0" }}>
-						{latest.message}
-					</p>
-				) : null}
-
-				{runs.length > 1 ? (
-					<div style={{ marginTop: "1rem", borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
-						<div className="dim" style={{ marginBottom: "0.4rem" }}>
-							Recent runs
+			<div className="admin-grid">
+				<section className="glass-panel">
+					<div className="spread" style={{ marginBottom: "0.8rem" }}>
+						<div>
+							<p className="eyebrow">GitHub sync</p>
+							<h3>Latest status</h3>
 						</div>
-						<ul className="run-list">
-							{runs.slice(0, 5).map((run) => (
-								<li key={String(run.id)}>
+						<Link to="/admin/repos" className="btn btn-sm">
+							Manage projects
+						</Link>
+					</div>
+					{overview?.lastSync ? (
+						<>
+							<div className="row row-tight">
+								<StatusBadge status={overview.lastSync.status} />
+								<span className="badge">{overview.lastSync.trigger}</span>
+							</div>
+							<p className="muted" style={{ marginTop: "0.8rem" }}>
+								{overview.lastSync.message ?? "No message recorded."}
+							</p>
+							<div className="metrics-stack compact-metrics">
+								<DetailRow label="Repos" value={String(overview.lastSync.repoCount)} />
+								<DetailRow label="New discoveries" value={String(overview.lastSync.discoveredCount)} />
+								<DetailRow label="Duration" value={`${overview.lastSync.durationMs}ms`} />
+								<DetailRow
+									label="Rate limit"
+									value={
+										overview.lastSync.rateLimitLimit
+											? `${overview.lastSync.rateLimitRemaining}/${overview.lastSync.rateLimitLimit}`
+											: "—"
+									}
+								/>
+							</div>
+						</>
+					) : (
+						<p className="muted">No sync data yet.</p>
+					)}
+
+					{overview?.recentSyncs?.length ? (
+						<ul className="timeline-list">
+							{overview.recentSyncs.slice(0, 5).map((run) => (
+								<li key={run.id}>
 									<StatusBadge status={run.status} />
-									<span className="dim">
-										{formatDate(run.runAt)} · {run.repoCount} repos · {run.durationMs}ms
-									</span>
+									<div>
+										<strong>{new Date(run.runAt).toLocaleString()}</strong>
+										<span>{run.message ?? `${run.repoCount} repositories synced.`}</span>
+									</div>
 								</li>
 							))}
 						</ul>
+					) : null}
+				</section>
+
+				<section className="glass-panel">
+					<div className="spread" style={{ marginBottom: "0.8rem" }}>
+						<div>
+							<p className="eyebrow">Notifications</p>
+							<h3>What needs attention</h3>
+						</div>
+						<Link to="/notifications" className="btn btn-sm">
+							Open inbox
+						</Link>
 					</div>
-				) : null}
+					{overview?.recentNotifications.length ? (
+						<ul className="feed-list">
+							{overview.recentNotifications.slice(0, 6).map((item) => (
+								<NotificationRow key={item.id} item={item} />
+							))}
+						</ul>
+					) : (
+						<p className="muted">No recent notifications.</p>
+					)}
+				</section>
 			</div>
+
+			<section className="glass-panel">
+				<div className="spread" style={{ marginBottom: "0.8rem" }}>
+					<div>
+						<p className="eyebrow">Audit trail</p>
+						<h3>Important admin changes</h3>
+					</div>
+					<Link to="/admin/users" className="btn btn-sm">
+						Manage users
+					</Link>
+				</div>
+				{overview?.recentAudit.length ? (
+					<ul className="feed-list audit-list">
+						{overview.recentAudit.map((entry) => (
+							<AuditRow key={entry.id} entry={entry} />
+						))}
+					</ul>
+				) : (
+					<p className="muted">No audit events recorded yet.</p>
+				)}
+			</section>
 		</div>
 	);
 }
 
-function AdminCard({
-	title,
-	body,
-	to,
-	cta,
-}: {
-	title: string;
-	body: string;
-	to: string;
-	cta: string;
-}) {
+function DashboardStat({ label, value }: { label: string; value: string }) {
 	return (
-		<div className="card">
-			<h2 style={{ fontSize: "1.15rem" }}>{title}</h2>
-			<p className="muted" style={{ fontSize: "0.92rem" }}>
-				{body}
-			</p>
-			<Link to={to} className="btn btn-sm">
-				{cta} →
-			</Link>
+		<div className="stat-card">
+			<strong>{value}</strong>
+			<span>{label}</span>
 		</div>
+	);
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="metric-inline metric-inline-wide">
+			<span>{label}</span>
+			<strong>{value}</strong>
+		</div>
+	);
+}
+
+function AuditRow({ entry }: { entry: AuditEntry }) {
+	return (
+		<li>
+			<div className="feed-item-head">
+				<strong>{entry.summary}</strong>
+				<span>{new Date(entry.createdAt).toLocaleString()}</span>
+			</div>
+			<span className="muted">{entry.actorEmail ?? entry.actorName ?? "System"}</span>
+		</li>
+	);
+}
+
+function NotificationRow({ item }: { item: NotificationItem }) {
+	return (
+		<li>
+			<div className="feed-item-head">
+				<strong>{item.title}</strong>
+				<span>{new Date(item.createdAt).toLocaleString()}</span>
+			</div>
+			<span className="muted">{item.message}</span>
+		</li>
 	);
 }
 
@@ -124,12 +192,8 @@ function StatusBadge({ status }: { status: string }) {
 			? "badge badge-success"
 			: status === "error"
 				? "badge badge-danger"
-				: "badge";
+				: status === "running"
+					? "badge badge-accent"
+					: "badge";
 	return <span className={cls}>{status}</span>;
-}
-
-function formatDate(value: number | Date): string {
-	const d = value instanceof Date ? value : new Date(value);
-	if (Number.isNaN(d.getTime())) return "unknown";
-	return d.toLocaleString();
 }

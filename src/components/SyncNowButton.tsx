@@ -3,20 +3,6 @@ import { apiSend } from "../lib/use-api";
 import type { SyncRun } from "../lib/types";
 import { Toast, useToast } from "./Toast";
 
-/**
- * "Sync from GitHub now" with a REAL pending state and a result toast (R5).
- *
- * POST /api/admin/sync returns immediately — the sync itself runs in
- * ctx.waitUntil — so simply disabling the button for the duration of the POST
- * (what the old code did) means it flashes "done" long before anything
- * happened. Instead: trigger → poll /api/admin/sync-log every 2s (max ~40s)
- * for a run newer than the trigger → toast the run's actual outcome
- * (ok + repoCount + duration, or its error status) → call onFinished so the
- * parent can refetch its tables.
- *
- * Used by both /admin/repos (refresh the curation table) and /admin
- * (refresh the sync-history card).
- */
 export function SyncNowButton({
 	onFinished,
 	label = "Sync from GitHub now",
@@ -40,23 +26,29 @@ export function SyncNowButton({
 		setPending(true);
 
 		try {
-			// Skew tolerance: a sync_log row written milliseconds after the POST
-			// must still count as "the run we started".
-			const startedAt = Date.now() - 1000;
-			await apiSend("/api/admin/sync", { method: "POST" });
+			const kickoff = await apiSend<{ started: boolean; runId: number; message: string }>(
+				"/api/admin/sync",
+				{ method: "POST" },
+			);
+
+			if (!kickoff.started) {
+				show("info", kickoff.message);
+				onFinished?.();
+				return;
+			}
 
 			let finished: SyncRun | null = null;
-			for (let attempt = 0; attempt < 20 && !finished; attempt++) {
-				await sleep(2000);
+			for (let attempt = 0; attempt < 25 && !finished; attempt++) {
+				await sleep(1600);
 				if (dead.current) return;
 				try {
 					const { runs } = await apiSend<{ runs: SyncRun[] }>("/api/admin/sync-log", {
 						method: "GET",
 					});
-					finished =
-						runs.find((r) => runAtMs(r) >= startedAt) ?? null;
+					const current = runs.find((run) => run.id === kickoff.runId) ?? null;
+					if (current && current.status !== "running") finished = current;
 				} catch {
-					// A failed poll is not a failed sync — keep polling.
+					/* keep polling */
 				}
 			}
 
@@ -67,13 +59,12 @@ export function SyncNowButton({
 			} else if (finished.status === "ok") {
 				show(
 					"success",
-					`Sync finished — ${finished.repoCount} repos in ${finished.durationMs}ms.`,
+					`Sync finished — ${finished.repoCount} repos, ${finished.discoveredCount} new, ${finished.durationMs}ms.`,
 				);
+			} else if (finished.status === "skipped") {
+				show("info", finished.message ?? "Sync skipped.");
 			} else {
-				show(
-					"error",
-					`Sync ${finished.status}: ${finished.message ?? "no details recorded"}`,
-				);
+				show("error", `Sync ${finished.status}: ${finished.message ?? "no details recorded"}`);
 			}
 			onFinished?.();
 		} catch (err) {
@@ -105,10 +96,6 @@ export function SyncNowButton({
 			<Toast toast={toast} dismiss={dismiss} />
 		</>
 	);
-}
-
-function runAtMs(run: SyncRun): number {
-	return run.runAt instanceof Date ? run.runAt.getTime() : Number(run.runAt);
 }
 
 function sleep(ms: number): Promise<void> {

@@ -1,0 +1,23 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">you.ge logo mark</title>
+  <desc id="desc">Rounded square gradient mark with a stylised Y and G monogram.</desc>
+  <defs>
+    <linearGradient id="bg" x1="82" y1="72" x2="432" y2="452" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A89BFF"/>
+      <stop offset="0.55" stop-color="#7A69FF"/>
+      <stop offset="1" stop-color="#52DFC6"/>
+    </linearGradient>
+    <linearGradient id="stroke" x1="126" y1="136" x2="368" y2="378" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.98"/>
+      <stop offset="1" stop-color="#E8F8FF" stop-opacity="0.82"/>
+    </linearGradient>
+  </defs>
+  <rect x="30" y="30" width="452" height="452" rx="124" fill="#090B15"/>
+  <rect x="30" y="30" width="452" height="452" rx="124" fill="url(#bg)" fill-opacity="0.18"/>
+  <rect x="45" y="45" width="422" height="422" rx="109" stroke="url(#bg)" stroke-opacity="0.45" stroke-width="8"/>
+  <path d="M148 149L227 255L227 345" stroke="url(#stroke)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M364 149L286 255L286 345" stroke="url(#stroke)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M173 347C191 384 226 404 270 404C335 404 383 356 383 291C383 226 336 177 274 177C229 177 191 201 171 238" stroke="url(#stroke)" stroke-width="34" stroke-linecap="round"/>
+  <path d="M318 291H384" stroke="url(#stroke)" stroke-width="34" stroke-linecap="round"/>
+  <circle cx="384" cy="291" r="10" fill="#F7F8FF"/>
+</svg>

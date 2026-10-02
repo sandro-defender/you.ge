@@ -1,37 +1,9 @@
 import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { ClientRuntime } from "../components/ClientRuntime";
 import { Nav } from "../components/Nav";
 import { NotFound } from "../components/NotFound";
 import appStyles from "../styles/app.css?url";
 
-/**
- * Root route.
- *
- * `?url` on the CSS import makes Vite emit a hashed stylesheet and hand back
- * its URL, which we then register as a <link> through the route's `head()`.
- * That is the idiomatic Start way to get CSS into SSR output — importing the
- * stylesheet for its side effects instead would leave the server render
- * unstyled until hydration.
- *
- * ── THE DOCUMENT SHELL IS LOAD-BEARING (verified against installed packages) ──
- * This component MUST render the full document — `<html><head><HeadContent />
- * </head><body>…<Scripts /></body></html>` — not just a fragment:
- *
- *   1. `head()` entries (title, meta, the CSS <link> above) are only emitted
- *      where `<HeadContent />` renders. Without it the browser never receives
- *      the stylesheet, title, viewport or robots tags: a fragment-only root
- *      ships an unstyled page with no <head> at all.
- *   2. `<Scripts />` (server side) calls `takeInitialHydrationScriptTags()`,
- *      which is what places the router bootstrap scripts in the body and marks
- *      the stream boundary the SSR transform waits on before emitting
- *      `</body></html>`.
- *   3. React 19's server renderer only prepends `<!DOCTYPE html>` when the
- *      root element is `<html>` (the preamble path in react-dom's
- *      `doctypeChunk` handling). A fragment root produces a doctype-less
- *      response and the browser drops into quirks mode.
- *
- * The canonical shape matches the skill docs shipped inside the installed
- * `@tanstack/react-start` package (`skills/react-start/SKILL.md`).
- */
 export const Route = createRootRoute({
 	head: () => ({
 		meta: [
@@ -40,61 +12,42 @@ export const Route = createRootRoute({
 			{ title: "you.ge" },
 			{
 				name: "description",
-				content: "Projects and writing by sandro-defender. Access by invitation.",
+				content:
+					"Premium developer portfolio for Sandro — product-minded engineering, curated GitHub work, and a private client showcase.",
 			},
-			// FAIL-CLOSED DEFAULT (R7): every route is noindex unless the route
-			// itself overrides with index,follow — the meta merge dedupes by
-			// name and the most-specific route wins (verified against the
-			// installed @tanstack/react-router headContentUtils). Only `/`
-			// overrides. A future route that forgets its robots meta is hidden
-			// from crawlers by default — for a gated site that is the right
-			// failure mode. Anything that never renders meta (gate pages, the
-			// Worker error page) carries noindex inline.
 			{ name: "robots", content: "noindex, nofollow" },
 			{ name: "color-scheme", content: "dark" },
-			{ name: "theme-color", content: "#0a0a0f" },
-			// ── Open Graph / Twitter share-card defaults (R7) ────────────────────
-			// Generic card for every route. `/` refines og:title/description/url;
-			// gated routes deliberately keep the generic card so NO project or
-			// user data can leak into a share preview (and anonymous scrapers
-			// only ever see the 302 anyway). twitter:title/description are
-			// intentionally NOT set: Twitter falls back to the og: values, so
-			// the override chain stays single-sourced.
+			{ name: "theme-color", content: "#0a0914" },
 			{ property: "og:site_name", content: "you.ge" },
 			{ property: "og:type", content: "website" },
 			{ property: "og:title", content: "you.ge" },
 			{
 				property: "og:description",
 				content:
-					"Projects and writing by sandro-defender. Access by invitation.",
+					"Premium developer portfolio for Sandro — product-minded engineering, curated GitHub work, and a private client showcase.",
 			},
 			{ property: "og:url", content: "https://you.ge/" },
-			{ property: "og:image", content: "https://you.ge/og.jpg" },
+			{ property: "og:image", content: "https://you.ge/og-image.jpg" },
 			{ property: "og:image:width", content: "1200" },
 			{ property: "og:image:height", content: "630" },
-			{
-				property: "og:image:alt",
-				content: "you.ge — Sandro's web projects",
-			},
+			{ property: "og:image:alt", content: "you.ge — premium developer portfolio" },
 			{ name: "twitter:card", content: "summary_large_image" },
-			{ name: "twitter:image", content: "https://you.ge/og.jpg" },
+			{ name: "twitter:image", content: "https://you.ge/og-image.jpg" },
 		],
-		links: [{ rel: "stylesheet", href: appStyles }],
+		links: [
+			{ rel: "stylesheet", href: appStyles },
+			{ rel: "canonical", href: "https://you.ge/" },
+			{ rel: "icon", href: "/favicon.ico", sizes: "any" },
+			{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+			{ rel: "icon", type: "image/png", href: "/favicon-32x32.png", sizes: "32x32" },
+			{ rel: "icon", type: "image/png", href: "/favicon-16x16.png", sizes: "16x16" },
+			{ rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+			{ rel: "manifest", href: "/site.webmanifest" },
+			{ rel: "mask-icon", href: "/brand/logo-mark.svg", color: "#8b7bff" },
+		],
 	}),
-	/**
-	 * Real 404s: the `$` splat throws `notFound()` (see `src/routes/$.tsx`)
-	 * and this component renders with a proper HTTP 404 status.
-	 */
 	notFoundComponent: NotFound,
 	component: RootComponent,
-	/**
-	 * Error boundary for route-level failures (loader/render throws), on the
-	 * server AND after hydration. SECURITY: never render `error.message` or a
-	 * stack — SSR exceptions can carry file paths, SQL fragments or env values,
-	 * and this page is world-readable. The server logs the details; the user
-	 * gets an apology and a way out. Anything that escapes even this lands in
-	 * the Worker entry's try/catch → serverErrorPage() (src/server/gate-page).
-	 */
 	errorComponent: RootError,
 });
 
@@ -106,20 +59,33 @@ function RootComponent() {
 			</head>
 			<body>
 				<Nav />
-				<main className="shell">
+				<ClientRuntime />
+				<main className="shell" id="content">
 					<Outlet />
 				</main>
+				<footer className="site-footer shell">
+					<div>
+						<strong>you.ge</strong>
+						<p>
+							A private-first portfolio powered by TanStack Start, Hono,
+							better-auth, Cloudflare Workers, D1, and curated GitHub data.
+						</p>
+					</div>
+					<div className="site-footer-links">
+						<a href="https://github.com/sandro-defender" target="_blank" rel="noreferrer noopener">
+							GitHub ↗
+						</a>
+						<a href="https://you.ge" target="_blank" rel="noreferrer noopener">
+							Production ↗
+						</a>
+					</div>
+				</footer>
 				<Scripts />
 			</body>
 		</html>
 	);
 }
 
-/**
- * Branded, information-free error state. Mirrors the Worker-level
- * serverErrorPage(): same copy tone, no stack, no error.message. `reset`
- * re-mounts the route tree (client-side retry).
- */
 function RootError({ reset }: { error: unknown; reset: () => void }) {
 	return (
 		<html lang="en">
@@ -129,11 +95,9 @@ function RootError({ reset }: { error: unknown; reset: () => void }) {
 			<body>
 				<Nav />
 				<main className="shell" style={{ paddingTop: "3rem" }}>
-					<div className="card" style={{ maxWidth: "36rem" }} aria-labelledby="err-title">
+					<div className="glass-panel error-panel" aria-labelledby="err-title">
 						<span className="badge badge-danger">500 · Server error</span>
-						<h1 id="err-title" style={{ fontSize: "1.5rem" }}>
-							Something went wrong
-						</h1>
+						<h1 id="err-title">Something went wrong</h1>
 						<p className="muted">
 							An unexpected error occurred while rendering this page. It has
 							been logged — try again in a moment.

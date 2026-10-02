@@ -21,6 +21,12 @@
     "auth:grant-admin": "node scripts/grant-admin.mjs",
     "auth:info": "auth info --config ./src/lib/auth.ts",
     "test:next": "node scripts/next-guard-test.mjs",
+    "test:ranking": "node scripts/ranking-filtering-test.mjs",
+    "test:admin": "node scripts/admin-permissions-test.mjs",
+    "test:notifications": "node scripts/notifications-test.mjs",
+    "test:pwa": "node scripts/pwa-registration-test.mjs",
+    "test:sync-batching": "node scripts/github-sync-batch-test.mjs",
+    "test": "npm run test:ranking && npm run test:admin && npm run test:notifications && npm run test:pwa && npm run test:sync-batching",
     "typecheck": "tsc --noEmit",
     "deploy:dry": "vite build && wrangler deploy -c dist/server/wrangler.json --dry-run"
   },
