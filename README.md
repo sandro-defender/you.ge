@@ -275,6 +275,36 @@ If `wrangler deploy` reports the zone is not in the account, either add the
 `you.ge` zone to Cloudflare or remove that block and use the
 `you-ge.<account>.workers.dev` URL meanwhile.
 
+### Deploy with GitHub Actions (CI)
+
+`.github/workflows/deploy.yml` runs the same pipeline (guards → typecheck →
+safety-checked migrations → build → deploy → health check) on every push to
+`main`, and on demand via `gh workflow run deploy.yml` / the Actions tab. Use
+it when the deploying machine cannot reach `api.cloudflare.com` itself (e.g.
+agent sandboxes) or you simply want push-to-deploy.
+
+One-time setup — values live only in the two dashboards, never in chat/repo:
+
+1. **Cloudflare → My Profile → API Tokens → Create Token** — template
+   **Edit Cloudflare Workers**, plus `Account | D1 | Edit` and
+   `Zone | Workers Routes | Edit` (the `you.ge` custom domain), scoped to the
+   account and the `you.ge` zone.
+2. **GitHub → Settings → Secrets and variables → Actions** —
+   `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` (required); optionally
+   `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and
+   `APP_GITHUB_TOKEN` (→ becomes the `GITHUB_TOKEN` Worker secret; the names
+   differ because GitHub reserves `secrets.GITHUB_TOKEN` for the workflow's
+   own token). Runtime secrets not stored in GitHub can still be set any time
+   via `wrangler secret put` or the Cloudflare dashboard.
+
+First-ever deploy: dispatch with `create_db: true` — the job creates
+`you-ge-main`, wires its uuid **in the runner workspace**, and prints the
+uuid in the step summary. Pin it into `wrangler.jsonc` and commit (or the
+next run's safety check refuses: an existing unpinned DB is "not provably
+ours"). `grant_admin_email` on a dispatch runs the admin bootstrap
+post-deploy. Without those inputs, a dispatch (or push) just migrates
+(idempotent), deploys, and health-checks.
+
 ### Secrets
 
 Set locally in `.dev.vars` (gitignored; see `.dev.vars.example`), in
@@ -312,6 +342,10 @@ from the repo root. **Nothing here needs agent access** — it is the complete
 day-2 operator manual.
 
 ### Redeploy after pulling changes
+
+Merged to `main` and the CI secrets from
+[Deploy with GitHub Actions](#deploy-with-github-actions-ci) are in place?
+Pushing is enough — the workflow does the rest. By hand:
 
 ```bash
 git pull
