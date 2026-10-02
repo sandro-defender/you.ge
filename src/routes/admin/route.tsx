@@ -2,20 +2,9 @@ import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
 import { getServerSession, type SessionUser } from "../../lib/session-fn";
 import { safeLoader } from "../../lib/safe-loader";
 
-/**
- * Admin layout.
- *
- * Like /projects, the real gate is src/server.ts: it checks
- * `session.user.role === "admin"` and returns 403 before rendering. What is
- * here is layout, navigation, and confirming the session for display.
- */
 export const Route = createFileRoute("/admin")({
-	head: () => ({
-		meta: [{ title: "Admin — you.ge" }],
-	}),
-	loader: safeLoader(async () => ({
-		session: await getServerSession(),
-	})),
+	head: () => ({ meta: [{ title: "Admin — you.ge" }] }),
+	loader: safeLoader(async () => ({ session: await getServerSession() })),
 	component: AdminLayout,
 });
 
@@ -23,25 +12,25 @@ function AdminLayout() {
 	const { session } = Route.useLoaderData() as { session: SessionUser | null };
 
 	return (
-		<div style={{ paddingTop: "2rem" }}>
-			<div className="spread" style={{ marginBottom: "1.5rem" }}>
-				<div>
-					<h1>Admin</h1>
-					<p className="muted" style={{ margin: 0 }}>
-						{session ? `Signed in as ${session.email}` : "Administrator"}
-					</p>
-				</div>
-			</div>
+		<div className="page-stack">
+			<section className="page-header">
+				<p className="eyebrow">Admin dashboard</p>
+				<h1>Operate the portfolio without touching raw tables</h1>
+				<p className="muted page-subtitle">
+					Signed in as {session?.email ?? "administrator"}. Sync GitHub, curate
+					projects, manage users, and review audit events from one place.
+				</p>
+			</section>
 
-			<div className="row" style={{ marginBottom: "1.75rem", gap: "0.4rem" }}>
-				<Link to="/admin" className="btn btn-sm" activeOptions={{ exact: true }}>
+			<div className="tabs-row" role="tablist" aria-label="Admin sections">
+				<Link to="/admin" className="tab-link" activeProps={{ "data-status": "active" }} activeOptions={{ exact: true }}>
 					Overview
 				</Link>
-				<Link to="/admin/users" className="btn btn-sm">
-					Users &amp; access
-				</Link>
-				<Link to="/admin/repos" className="btn btn-sm">
+				<Link to="/admin/repos" className="tab-link" activeProps={{ "data-status": "active" }}>
 					Projects
+				</Link>
+				<Link to="/admin/users" className="tab-link" activeProps={{ "data-status": "active" }}>
+					Users &amp; access
 				</Link>
 			</div>
 

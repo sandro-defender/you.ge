@@ -1,142 +1,190 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
+import { ProjectCard } from "../components/ProjectCard";
 import { getServerSession, type SessionUser } from "../lib/session-fn";
+import {
+	DEFAULT_PROJECT_FILTERS,
+	collectFacets,
+	filterProjects,
+} from "../lib/repo-ranking";
 import { safeLoader } from "../lib/safe-loader";
-import type { PublicProject } from "../lib/types";
+import type { ProjectFilterState, PublicProject } from "../lib/types";
+import { useApi } from "../lib/use-api";
 
-/**
- * Gated projects page.
- *
- * ACCESS CONTROL IS NOT HERE. src/server.ts already refused to render this route
- * at all for anyone without a valid, unbanned session — it returns a 302 to
- * /login before React ever runs. The `beforeLoad` check below is a second belt,
- * not the braces.
- *
- * ── WHY DATA IS FETCHED IN useEffect AND NOT IN `loader` ────────────────────
- * A route `loader` runs on the SERVER during SSR. If it fetched "/api/projects",
- * the Worker would be making an HTTP request to itself — and a Worker waiting on
- * a subrequest to itself deadlocks the isolate. Start's own request context
- * (getRequestHeaders) is fine in a loader because it reads memory, not network;
- * a self-fetch is not. So: the loader pulls the session from the internal header
- * (no I/O), and the project list is fetched client-side after hydration, where
- * "/api/projects" is a normal same-origin browser request.
- *
- * ── RETRY (R4) ──────────────────────────────────────────────────────────────
- * The fetch depends on a `reloadKey` counter, so the "Try again" button on the
- * error state re-runs it (resetting state first so the skeleton comes back)
- * instead of asking the user to refresh the whole page.
- */
 export const Route = createFileRoute("/projects")({
-	head: () => ({
-		meta: [{ title: "Projects — you.ge" }],
-	}),
-	loader: safeLoader(async () => ({
-		session: await getServerSession(),
-	})),
+	head: () => ({ meta: [{ title: "Projects — you.ge" }] }),
+	loader: safeLoader(async () => ({ session: await getServerSession() })),
 	component: Projects,
 });
 
-type ProjectsResponse = {
-	projects?: PublicProject[];
-	error?: string;
-};
-
 function Projects() {
 	const { session } = Route.useLoaderData() as { session: SessionUser | null };
-	const [projects, setProjects] = useState<PublicProject[] | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [reloadKey, setReloadKey] = useState(0);
-
-	useEffect(() => {
-		let cancelled = false;
-
-		// Drop any stale error/list from a previous attempt so the skeleton
-		// (not the old error) shows while this one is in flight.
-		setProjects(null);
-		setError(null);
-
-		void (async () => {
-			try {
-				const res = await fetch("/api/projects", {
-					// Same-origin cookies carry the better-auth session.
-					credentials: "same-origin",
-					headers: { Accept: "application/json" },
-				});
-				const data = (await res.json()) as ProjectsResponse;
-
-				if (cancelled) return;
-				if (!res.ok) {
-					setError(data.error ?? `Request failed (${res.status})`);
-					return;
-				}
-				setProjects(data.projects ?? []);
-			} catch (err) {
-				if (!cancelled) {
-					setError(err instanceof Error ? err.message : "Could not load projects");
-				}
-			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [reloadKey]);
-
-	const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+	const { data, error, loading, refetch } = useApi<{ projects: PublicProject[] }>("/api/projects");
+	const [filters, setFilters] = useState<ProjectFilterState>(DEFAULT_PROJECT_FILTERS);
+	const projects = data?.projects ?? [];
+	const facets = useMemo(() => collectFacets(projects), [projects]);
+	const visible = useMemo(() => filterProjects(projects, filters), [projects, filters]);
 
 	return (
-		<div style={{ paddingTop: "2rem" }}>
-			<div className="spread" style={{ marginBottom: "1.75rem" }}>
+		<div className="page-stack">
+			<section className="page-header">
 				<div>
-					<h1>Projects</h1>
-					<p className="muted" style={{ margin: 0 }}>
-						Synced from GitHub every 6 hours.
-						{session ? ` Signed in as ${session.email}.` : ""}
+					<p className="eyebrow">Project library</p>
+					<h1>Discover the strongest repositories first</h1>
+					<p className="muted page-subtitle">
+						Sorted automatically by activity, quality signals, and editorial
+						priority. Signed in as {session?.email ?? "member"}.
 					</p>
 				</div>
-				{/* role=status announces "loading" → "N visible" politely. */}
-				<span className="badge" role="status" aria-live="polite">
-					{projects === null ? "loading" : `${projects.length} visible`}
-				</span>
-			</div>
+				<div className="stat-strip">
+					<MiniStat label="Visible" value={String(projects.length)} />
+					<MiniStat label="Featured" value={String(projects.filter((project) => project.featured).length)} />
+					<MiniStat label="Languages" value={String(facets.languages.length)} />
+				</div>
+			</section>
+
+			<section className="glass-panel filter-panel">
+				<div className="filter-grid">
+					<label className="field-label">
+						<span>Search</span>
+						<input
+							className="input"
+							type="search"
+							placeholder="Search projects, tags, or categories…"
+							value={filters.search}
+							onChange={(event) =>
+								setFilters((current) => ({ ...current, search: event.target.value }))
+							}
+						/>
+					</label>
+
+					<label className="field-label">
+						<span>Language</span>
+						<select
+							className="select"
+							value={filters.language}
+							onChange={(event) =>
+								setFilters((current) => ({ ...current, language: event.target.value }))
+							}
+						>
+							<option value="all">All languages</option>
+							{facets.languages.map((language) => (
+								<option key={language} value={language}>
+									{language}
+								</option>
+							))}
+						</select>
+					</label>
+
+					<label className="field-label">
+						<span>Topic</span>
+						<select
+							className="select"
+							value={filters.topic}
+							onChange={(event) =>
+								setFilters((current) => ({ ...current, topic: event.target.value }))
+							}
+						>
+							<option value="all">All topics</option>
+							{facets.topics.map((topic) => (
+								<option key={topic} value={topic}>
+									{topic}
+								</option>
+							))}
+						</select>
+					</label>
+
+					<label className="field-label">
+						<span>Featured</span>
+						<select
+							className="select"
+							value={filters.featured}
+							onChange={(event) =>
+								setFilters((current) => ({
+									...current,
+									featured: event.target.value === "featured" ? "featured" : "all",
+								}))
+							}
+						>
+							<option value="all">All projects</option>
+							<option value="featured">Featured only</option>
+						</select>
+					</label>
+
+					<label className="field-label">
+						<span>Sort</span>
+						<select
+							className="select"
+							value={filters.sort}
+							onChange={(event) =>
+								setFilters((current) => ({
+									...current,
+									sort: event.target.value as ProjectFilterState["sort"],
+								}))
+							}
+						>
+							<option value="featured">Featured first</option>
+							<option value="activity">Newest activity</option>
+							<option value="stars">Most stars</option>
+							<option value="name">Alphabetical</option>
+						</select>
+					</label>
+				</div>
+				<div className="spread" style={{ marginTop: "1rem" }}>
+					<p className="muted" style={{ margin: 0 }}>
+						Showing {visible.length} of {projects.length} repositories.
+					</p>
+					<button type="button" className="btn btn-sm" onClick={refetch} disabled={loading}>
+						{loading ? <span className="spinner" /> : "Refresh"}
+					</button>
+				</div>
+			</section>
 
 			{error ? (
-				<div className="notice notice-danger" role="alert">
+				<div className="glass-panel notice notice-danger" role="alert">
 					<strong>Could not load projects.</strong>
-					<p className="muted" style={{ margin: "0.4rem 0 0" }}>
-						{error}
-					</p>
-					<div className="row" style={{ gap: "0.75rem", marginTop: "0.9rem" }}>
-						<button type="button" className="btn btn-sm" onClick={reload}>
-							↻ Try again
+					<p className="muted">{error}</p>
+					<div className="row">
+						<button type="button" className="btn btn-sm" onClick={refetch}>
+							Try again
 						</button>
 						<Link to="/" className="btn btn-sm">
-							Back to home
+							Back home
 						</Link>
 					</div>
-					<p className="dim" style={{ margin: "0.8rem 0 0" }}>
-						If this persists, the GitHub sync may not have run yet. An admin can
-						trigger it from <Link to="/admin/repos">the admin panel</Link>.
-					</p>
 				</div>
 			) : null}
 
-			{projects === null && !error ? <ProjectSkeleton /> : null}
-
-			{projects !== null && projects.length === 0 && !error ? (
-				<div className="notice notice-warning">
-					<strong>No projects yet.</strong>
-					<p className="muted" style={{ margin: "0.4rem 0 0" }}>
-						The repositories table is empty. Either the cron sync has not run,
-						or every repo is currently hidden by an administrator.
-					</p>
+			{loading ? (
+				<div className="project-grid">
+					{Array.from({ length: 6 }, (_, index) => (
+						<div key={index} className="glass-panel">
+							<div className="skeleton project-skeleton-media" />
+							<div className="skeleton" style={{ height: "1.35rem", marginTop: "1rem", width: "65%" }} />
+							<div className="skeleton" style={{ height: "1rem", marginTop: "0.8rem" }} />
+							<div className="skeleton" style={{ height: "1rem", marginTop: "0.55rem", width: "86%" }} />
+						</div>
+					))}
 				</div>
 			) : null}
 
-			{projects !== null && projects.length > 0 ? (
-				<div className="grid">
-					{projects.map((project) => (
-						<ProjectCard key={project.id} project={project} />
+			{!loading && !error && visible.length === 0 ? (
+				<div className="glass-panel empty-state">
+					<strong>No projects match those filters.</strong>
+					<p className="muted">
+						Try broadening the search, switching languages, or removing the
+						featured-only filter.
+					</p>
+					<button type="button" className="btn btn-sm" onClick={() => setFilters(DEFAULT_PROJECT_FILTERS)}>
+						Reset filters
+					</button>
+				</div>
+			) : null}
+
+			{!loading && visible.length > 0 ? (
+				<div className="project-grid">
+					{visible.map((project) => (
+						<ProjectCard key={project.id} project={project} compact />
 					))}
 				</div>
 			) : null}
@@ -144,100 +192,11 @@ function Projects() {
 	);
 }
 
-function ProjectCard({ project }: { project: PublicProject }) {
+function MiniStat({ label, value }: { label: string; value: string }) {
 	return (
-		<a
-			className="card card-hover project-card"
-			href={project.url}
-			target="_blank"
-			rel="noreferrer noopener"
-		>
-			<div className="spread">
-				<h3 className="project-name">
-					{project.name}
-					{/* External-link affordance: the whole card is the link, so the
-					    arrow says "this opens on github.com". */}
-					<span className="ext-arrow" aria-hidden="true">
-						↗
-					</span>
-				</h3>
-				{project.featured ? <span className="badge badge-accent">Featured</span> : null}
-			</div>
-
-			<p className="project-desc">
-				{project.description ?? <span className="dim">No description.</span>}
-			</p>
-
-			<div className="row">
-				{project.language ? <span className="badge">{project.language}</span> : null}
-				<span className="badge">★ {formatCount(project.stars)}</span>
-				<span className="badge">⑂ {formatCount(project.forks)}</span>
-			</div>
-
-			{project.topics.length > 0 ? (
-				<div className="row">
-					{project.topics.slice(0, 4).map((topic) => (
-						<span key={topic} className="dim" style={{ fontSize: "0.75rem" }}>
-							#{topic}
-						</span>
-					))}
-				</div>
-			) : null}
-
-			<div className="card-meta">
-				<span>{project.pushedAt ? `Updated ${relativeTime(project.pushedAt)}` : ""}</span>
-				<span className="ext-hint">View on GitHub</span>
-			</div>
-		</a>
-	);
-}
-
-function ProjectSkeleton() {
-	return (
-		<div className="grid" aria-hidden="true">
-			{[0, 1, 2].map((i) => (
-				<div key={i} className="card">
-					<div className="skeleton" style={{ height: "1.1rem", width: "55%" }} />
-					<div className="skeleton" style={{ height: "0.85rem", width: "100%", marginTop: "0.9rem" }} />
-					<div className="skeleton" style={{ height: "0.85rem", width: "78%", marginTop: "0.5rem" }} />
-					<div className="row" style={{ marginTop: "1rem" }}>
-						<div className="skeleton" style={{ height: "1.3rem", width: "4.5rem", borderRadius: "999px" }} />
-						<div className="skeleton" style={{ height: "1.3rem", width: "3.5rem", borderRadius: "999px" }} />
-					</div>
-				</div>
-			))}
+		<div className="stat-card stat-card-compact">
+			<strong>{value}</strong>
+			<span>{label}</span>
 		</div>
 	);
-}
-
-function formatCount(n: number): string {
-	if (n < 1000) return String(n);
-	return `${(n / 1000).toFixed(1)}k`;
-}
-
-/**
- * Coarse relative time for "Updated …" (client-side render only — the card grid
- * is produced after hydration, so there is no SSR/hydration time mismatch to
- * worry about). Unparseable input renders as empty, never "NaN".
- */
-function relativeTime(iso: string): string {
-	const ms = Date.now() - Date.parse(iso);
-	if (!Number.isFinite(ms) || ms < 0) return "";
-
-	const minutes = ms / 60_000;
-	if (minutes < 1) return "just now";
-	if (minutes < 60) return plural(Math.round(minutes), "minute");
-	const hours = minutes / 60;
-	if (hours < 24) return plural(Math.round(hours), "hour");
-	const days = hours / 24;
-	if (days < 8) return plural(Math.round(days), "day");
-	const weeks = days / 7;
-	if (weeks < 5) return plural(Math.round(weeks), "week");
-	const months = days / 30.44;
-	if (months < 12) return plural(Math.round(months), "month");
-	return plural(Math.round(days / 365.25), "year");
-}
-
-function plural(n: number, unit: string): string {
-	return `${n} ${unit}${n === 1 ? "" : "s"} ago`;
 }

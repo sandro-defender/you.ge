@@ -13,10 +13,13 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminReposRouteImport } from './routes/admin/repos'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as ProjectsOwnerNameRouteImport } from './routes/projects.$owner.$name'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -38,9 +41,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -58,25 +71,36 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const ProjectsOwnerNameRoute = ProjectsOwnerNameRouteImport.update({
+  id: '/$owner/$name',
+  path: '/$owner/$name',
+  getParentRoute: () => ProjectsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteRouteWithChildren
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
-  '/projects': typeof ProjectsRoute
+  '/notifications': typeof NotificationsRoute
+  '/projects': typeof ProjectsRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/admin/repos': typeof AdminReposRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
+  '/projects/$owner/$name': typeof ProjectsOwnerNameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
-  '/projects': typeof ProjectsRoute
+  '/notifications': typeof NotificationsRoute
+  '/projects': typeof ProjectsRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/admin/repos': typeof AdminReposRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin': typeof AdminIndexRoute
+  '/projects/$owner/$name': typeof ProjectsOwnerNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -84,10 +108,13 @@ export interface FileRoutesById {
   '/admin': typeof AdminRouteRouteWithChildren
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
-  '/projects': typeof ProjectsRoute
+  '/notifications': typeof NotificationsRoute
+  '/projects': typeof ProjectsRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/admin/repos': typeof AdminReposRoute
   '/admin/users': typeof AdminUsersRoute
   '/admin/': typeof AdminIndexRoute
+  '/projects/$owner/$name': typeof ProjectsOwnerNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,29 +123,38 @@ export interface FileRouteTypes {
     | '/admin'
     | '/$'
     | '/login'
+    | '/notifications'
     | '/projects'
+    | '/settings'
     | '/admin/repos'
     | '/admin/users'
     | '/admin/'
+    | '/projects/$owner/$name'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/$'
     | '/login'
+    | '/notifications'
     | '/projects'
+    | '/settings'
     | '/admin/repos'
     | '/admin/users'
     | '/admin'
+    | '/projects/$owner/$name'
   id:
     | '__root__'
     | '/'
     | '/admin'
     | '/$'
     | '/login'
+    | '/notifications'
     | '/projects'
+    | '/settings'
     | '/admin/repos'
     | '/admin/users'
     | '/admin/'
+    | '/projects/$owner/$name'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -126,7 +162,9 @@ export interface RootRouteChildren {
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   SplatRoute: typeof SplatRoute
   LoginRoute: typeof LoginRoute
-  ProjectsRoute: typeof ProjectsRoute
+  NotificationsRoute: typeof NotificationsRoute
+  ProjectsRoute: typeof ProjectsRouteWithChildren
+  SettingsRoute: typeof SettingsRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -159,11 +197,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -187,6 +239,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/projects/$owner/$name': {
+      id: '/projects/$owner/$name'
+      path: '/$owner/$name'
+      fullPath: '/projects/$owner/$name'
+      preLoaderRoute: typeof ProjectsOwnerNameRouteImport
+      parentRoute: typeof ProjectsRoute
+    }
   }
 }
 
@@ -206,12 +265,26 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
   AdminRouteRouteChildren,
 )
 
+interface ProjectsRouteChildren {
+  ProjectsOwnerNameRoute: typeof ProjectsOwnerNameRoute
+}
+
+const ProjectsRouteChildren: ProjectsRouteChildren = {
+  ProjectsOwnerNameRoute: ProjectsOwnerNameRoute,
+}
+
+const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
+  ProjectsRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRouteRoute: AdminRouteRouteWithChildren,
   SplatRoute: SplatRoute,
   LoginRoute: LoginRoute,
-  ProjectsRoute: ProjectsRoute,
+  NotificationsRoute: NotificationsRoute,
+  ProjectsRoute: ProjectsRouteWithChildren,
+  SettingsRoute: SettingsRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

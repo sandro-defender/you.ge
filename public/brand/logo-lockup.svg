@@ -1,0 +1,20 @@
+<svg width="720" height="220" viewBox="0 0 720 220" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">you.ge wordmark</title>
+  <desc id="desc">you.ge wordmark with the brand logo mark and premium developer portfolio subtitle.</desc>
+  <defs>
+    <linearGradient id="bg" x1="24" y1="22" x2="170" y2="178" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A89BFF"/>
+      <stop offset="0.55" stop-color="#7A69FF"/>
+      <stop offset="1" stop-color="#52DFC6"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="172" height="172" rx="52" fill="#090B15"/>
+  <rect x="16" y="16" width="172" height="172" rx="52" fill="url(#bg)" fill-opacity="0.18"/>
+  <rect x="22" y="22" width="160" height="160" rx="46" stroke="url(#bg)" stroke-opacity="0.45" stroke-width="4"/>
+  <path d="M60 62L88 100L88 132" stroke="#F7F8FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M146 62L118 100L118 132" stroke="#F7F8FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M69 133C76 147 90 155 106 155C130 155 148 137 148 113C148 89 131 70 108 70C91 70 78 79 70 92" stroke="#F7F8FF" stroke-width="11.5" stroke-linecap="round"/>
+  <path d="M124 113H149" stroke="#F7F8FF" stroke-width="11.5" stroke-linecap="round"/>
+  <text x="228" y="102" fill="#F5F6FF" font-size="74" font-weight="800" font-family="Inter, Arial, sans-serif" letter-spacing="-3">you.ge</text>
+  <text x="230" y="144" fill="#9DA7C8" font-size="26" font-weight="600" font-family="Inter, Arial, sans-serif" letter-spacing="0.5">premium developer portfolio</text>
+</svg>

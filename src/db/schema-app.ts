@@ -17,27 +17,18 @@ import {
 /**
  * A snapshot of a GitHub repository, refreshed by the cron trigger.
  *
- * WHY THIS TABLE EXISTS
- *   GitHub allows 60 unauthenticated requests/hour/IP and 5,000/hour for a PAT.
- *   Fetching repos during a page request would break the site within an hour of
- *   real traffic. So `scheduled()` pulls them every 6 hours into D1, and pages
- *   read only this table. Scheduled invocations are free and do not count
- *   against the 100k requests/day Workers Free allowance.
- *
- * QUOTA NOTE (Workers Free: 5M rows read/day, and "rows read" means rows
- * SCANNED, not rows returned)
- *   The homepage reads 1 row via `home_slug_idx`; the projects page reads the
- *   visible subset via `visible_sort_idx`. Both are index seeks. A query that
- *   ignores these indexes and scans the table would still be small at portfolio
- *   scale, but the indexes are what keep it that way as the table grows.
+ * GitHub remains the SOURCE OF TRUTH for repository facts (activity, stars,
+ * language, topics, homepage, description). Admin-managed fields sit alongside
+ * that snapshot so the owner can curate copy and presentation without ever
+ * hand-editing D1 rows.
  */
 export const repos = sqliteTable(
 	"repos",
 	{
-		id: integer("id").primaryKey(), // GitHub's own repo id — stable and unique
+		id: integer("id").primaryKey(),
 		owner: text("owner").notNull(),
 		name: text("name").notNull(),
-		slug: text("slug").notNull(), // "owner/name"
+		slug: text("slug").notNull(),
 		description: text("description"),
 		homepage: text("homepage"),
 		url: text("url").notNull(),
@@ -45,24 +36,29 @@ export const repos = sqliteTable(
 		stars: integer("stars").notNull().default(0),
 		forks: integer("forks").notNull().default(0),
 		openIssues: integer("open_issues").notNull().default(0),
-		topics: text("topics"), // JSON array as text — D1 has no JSON column type
+		topics: text("topics"),
 
-		/**
-		 * Curation flags. These are set by an admin, NOT by the GitHub sync —
-		 * the sync never overwrites them, so you can feature or hide a repo and
-		 * keep that choice across every refresh.
-		 */
+		featuredOverride: integer("featured_override", { mode: "boolean" }),
 		featured: integer("featured", { mode: "boolean" }).notNull().default(false),
 		hidden: integer("hidden", { mode: "boolean" }).notNull().default(false),
+		showOnHomepage: integer("show_on_homepage", { mode: "boolean" })
+			.notNull()
+			.default(false),
 		sortOrder: integer("sort_order").notNull().default(0),
+		manualPriority: integer("manual_priority").notNull().default(0),
 
-		/**
-		 * A hand-written description shown instead of GitHub's. This is where the
-		 * "description" part of your requirement lives — GitHub's own blurbs are
-		 * usually too terse for a portfolio.
-		 */
+		customTitle: text("custom_title"),
 		customDescription: text("custom_description"),
+		customTags: text("custom_tags"),
+		customImage: text("custom_image"),
+		imageAlt: text("image_alt"),
+		category: text("category"),
+		challenge: text("challenge"),
+		solution: text("solution"),
+		caseStudy: text("case_study"),
 
+		score: integer("score").notNull().default(0),
+		scoreBreakdown: text("score_breakdown"),
 		githubPushedAt: integer("github_pushed_at", { mode: "timestamp_ms" }),
 		githubCreatedAt: integer("github_created_at", { mode: "timestamp_ms" }),
 		lastSyncedAt: integer("last_synced_at", { mode: "timestamp_ms" })
@@ -70,24 +66,19 @@ export const repos = sqliteTable(
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
 	},
 	(table) => [
-		// The projects page: WHERE hidden = 0 ORDER BY featured DESC, sort_order.
-		// This composite index turns that into an index seek instead of a scan —
-		// which matters because D1 Free counts rows SCANNED against the 5M/day cap.
-		index("repos_visible_sort_idx").on(
+		index("repos_visible_sort_idx").on(table.hidden, table.featured, table.sortOrder),
+		index("repos_visible_rank_idx").on(
 			table.hidden,
-			table.featured,
+			table.showOnHomepage,
 			table.sortOrder,
+			table.score,
+			table.githubPushedAt,
 		),
-		// Single-repo lookup by slug, and the key the cron sync upserts on.
 		uniqueIndex("repos_slug_idx").on(table.slug),
 	],
 );
 
-/**
- * Audit log of cron syncs. One row per run, so you can see from the admin panel
- * whether the sync is alive and how many repos it touched — the cheapest
- * possible observability, and it costs one write every 6 hours.
- */
+/** Recent and in-progress GitHub sync runs. */
 export const syncLog = sqliteTable(
 	"sync_log",
 	{
@@ -95,10 +86,61 @@ export const syncLog = sqliteTable(
 		runAt: integer("run_at", { mode: "timestamp_ms" })
 			.notNull()
 			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
-		status: text("status").notNull(), // 'ok' | 'error' | 'skipped'
+		status: text("status").notNull(),
+		trigger: text("trigger").notNull().default("cron"),
 		repoCount: integer("repo_count").notNull().default(0),
+		discoveredCount: integer("discovered_count").notNull().default(0),
 		durationMs: integer("duration_ms").notNull().default(0),
 		message: text("message"),
+		rateLimitRemaining: integer("rate_limit_remaining"),
+		rateLimitLimit: integer("rate_limit_limit"),
+		rateLimitResetAt: integer("rate_limit_reset_at", { mode: "timestamp_ms" }),
 	},
-	(table) => [index("sync_log_run_at_idx").on(table.runAt)],
+	(table) => [
+		index("sync_log_run_at_idx").on(table.runAt),
+		index("sync_log_status_idx").on(table.status, table.runAt),
+	],
+);
+
+export const auditLog = sqliteTable(
+	"audit_log",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		actorUserId: text("actor_user_id"),
+		actorName: text("actor_name"),
+		actorEmail: text("actor_email"),
+		action: text("action").notNull(),
+		entityType: text("entity_type").notNull(),
+		entityId: text("entity_id"),
+		summary: text("summary").notNull(),
+		metadata: text("metadata"),
+		createdAt: integer("created_at", { mode: "timestamp_ms" })
+			.notNull()
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+	},
+	(table) => [
+		index("audit_log_created_at_idx").on(table.createdAt),
+		index("audit_log_actor_idx").on(table.actorUserId, table.createdAt),
+	],
+);
+
+export const notifications = sqliteTable(
+	"notifications",
+	{
+		id: integer("id").primaryKey({ autoIncrement: true }),
+		audience: text("audience").notNull(),
+		kind: text("kind").notNull(),
+		level: text("level").notNull(),
+		title: text("title").notNull(),
+		message: text("message").notNull(),
+		link: text("link"),
+		metadata: text("metadata"),
+		createdAt: integer("created_at", { mode: "timestamp_ms" })
+			.notNull()
+			.default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`),
+		readAt: integer("read_at", { mode: "timestamp_ms" }),
+	},
+	(table) => [
+		index("notifications_audience_idx").on(table.audience, table.readAt, table.createdAt),
+	],
 );

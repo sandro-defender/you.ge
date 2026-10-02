@@ -98,10 +98,12 @@ function withSecurityHeaders(res: Response): Response {
  */
 const ACCESS_POLICY: ReadonlyArray<{
 	prefix: string;
-	requires: "member" | "admin";
+	requires: "auth" | "member" | "admin";
 }> = [
 	{ prefix: "/admin", requires: "admin" },
 	{ prefix: "/projects", requires: "member" },
+	{ prefix: "/notifications", requires: "auth" },
+	{ prefix: "/settings", requires: "auth" },
 ];
 
 export default {
@@ -124,7 +126,7 @@ export default {
 			const isSitemap = pathname === "/sitemap.xml";
 			const body = isSitemap
 				? `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://you.ge/</loc></url>\n</urlset>\n`
-				: `User-agent: *\nDisallow: /projects\nDisallow: /admin\nDisallow: /login\nDisallow: /api/\n\nSitemap: https://you.ge/sitemap.xml\n`;
+				: `User-agent: *\nDisallow: /projects\nDisallow: /admin\nDisallow: /notifications\nDisallow: /settings\nDisallow: /login\nDisallow: /api/\n\nSitemap: https://you.ge/sitemap.xml\n`;
 			return withSecurityHeaders(
 				new Response(body, {
 					headers: {

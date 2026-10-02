@@ -1,0 +1,52 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="86" y1="36" x2="1128" y2="594" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1020"/>
+      <stop offset="0.52" stop-color="#0A0E1B"/>
+      <stop offset="1" stop-color="#07101C"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="136" y1="86" x2="446" y2="386" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A89BFF"/>
+      <stop offset="0.58" stop-color="#7A69FF"/>
+      <stop offset="1" stop-color="#52DFC6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" rx="0" fill="url(#bg)"/>
+  <circle cx="1044" cy="98" r="220" fill="#7A69FF" fill-opacity="0.14"/>
+  <circle cx="164" cy="30" r="280" fill="#52DFC6" fill-opacity="0.08"/>
+  <g opacity="0.24">
+    <path d="M0 70H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 140H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 210H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 280H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 350H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 420H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 490H1200" stroke="white" stroke-width="1"/>
+    <path d="M0 560H1200" stroke="white" stroke-width="1"/>
+    <path d="M80 0V630" stroke="white" stroke-width="1"/>
+    <path d="M160 0V630" stroke="white" stroke-width="1"/>
+    <path d="M240 0V630" stroke="white" stroke-width="1"/>
+    <path d="M320 0V630" stroke="white" stroke-width="1"/>
+    <path d="M400 0V630" stroke="white" stroke-width="1"/>
+    <path d="M480 0V630" stroke="white" stroke-width="1"/>
+    <path d="M560 0V630" stroke="white" stroke-width="1"/>
+    <path d="M640 0V630" stroke="white" stroke-width="1"/>
+  </g>
+  <rect x="86" y="126" width="220" height="220" rx="64" fill="#090B15"/>
+  <rect x="86" y="126" width="220" height="220" rx="64" fill="url(#accent)" fill-opacity="0.18"/>
+  <rect x="93" y="133" width="206" height="206" rx="58" stroke="url(#accent)" stroke-opacity="0.45" stroke-width="4"/>
+  <path d="M141 182L177 230L177 270" stroke="#F7F8FF" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M253 182L216 230L216 270" stroke="#F7F8FF" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M152 272C161 291 180 303 200 303C232 303 256 279 256 247C256 215 233 191 202 191C181 191 163 202 154 220" stroke="#F7F8FF" stroke-width="14.5" stroke-linecap="round"/>
+  <path d="M225 247H258" stroke="#F7F8FF" stroke-width="14.5" stroke-linecap="round"/>
+  <text x="356" y="244" fill="#F6F8FF" font-size="82" font-weight="800" font-family="Inter, Arial, sans-serif" letter-spacing="-3">you.ge</text>
+  <text x="356" y="306" fill="#D0D8F8" font-size="34" font-weight="600" font-family="Inter, Arial, sans-serif">Premium developer portfolio · curated GitHub showcase</text>
+  <text x="356" y="388" fill="#9DA7C8" font-size="24" font-weight="500" font-family="Inter, Arial, sans-serif">Fast, elegant, Cloudflare-native, and private-first.</text>
+  <text x="356" y="426" fill="#9DA7C8" font-size="24" font-weight="500" font-family="Inter, Arial, sans-serif">Product-minded frontend systems, admin tooling, and launch-quality polish.</text>
+  <g transform="translate(356 486)">
+    <rect width="190" height="48" rx="24" fill="#8B7BFF" fill-opacity="0.18" stroke="#8B7BFF" stroke-opacity="0.42"/>
+    <text x="24" y="31" fill="#E4E0FF" font-size="22" font-weight="700" font-family="Inter, Arial, sans-serif">Selected work</text>
+    <rect x="214" width="210" height="48" rx="24" fill="#56E2C3" fill-opacity="0.14" stroke="#56E2C3" stroke-opacity="0.4"/>
+    <text x="238" y="31" fill="#C9FFF2" font-size="22" font-weight="700" font-family="Inter, Arial, sans-serif">Private showcase</text>
+  </g>
+</svg>

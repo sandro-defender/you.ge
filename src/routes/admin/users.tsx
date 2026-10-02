@@ -1,370 +1,213 @@
-import { useCallback, useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { authClient, useAuthSession } from "../../lib/auth-client";
+import { Toast, useToast } from "../../components/Toast";
+import type { AdminUser } from "../../lib/types";
+import { apiSend, useApi } from "../../lib/use-api";
 
-/**
- * Users & access — the page that satisfies "admin panel where I can grant
- * access to users".
- *
- * ── WHY THIS USES authClient.admin.* AND NOT A CUSTOM HONO ENDPOINT ─────────
- * better-auth's admin plugin already exposes list-users, set-role, ban-user,
- * unban-user and revoke-user-sessions at /api/auth/admin/*, with its own
- * authorization checks and audit-friendly semantics. Reimplementing them in
- * Hono would mean hand-rolling exactly what the plugin gives for free — and
- * getting the role check subtly wrong, which is the classic way an admin panel
- * ends up privately escalating privileges.
- *
- * ── THE DUAL-AUTHORIZATION GOTCHA ──────────────────────────────────────────
- * These endpoints enforce `user.role === "admin"` IN THE DATABASE, separately
- * from the guard in src/server.ts. If your role is only set via an env allowlist
- * and not in the `user` table, every button below returns 403 while the page
- * itself loads fine. Fix: `npm run auth:create-admin`.
- */
 export const Route = createFileRoute("/admin/users")({
 	head: () => ({ meta: [{ title: "Users & access — you.ge" }] }),
 	component: AdminUsers,
 });
 
-type UserRow = {
-	id: string;
-	name: string;
-	email: string;
-	image?: string | null;
-	role?: string | null;
-	banned?: boolean | null;
-	banReason?: string | null;
-	createdAt?: string | Date | number | null;
-};
-
 function AdminUsers() {
-	const { user: me } = useAuthSession();
-	const [users, setUsers] = useState<UserRow[] | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const [loading, setLoading] = useState(true);
-	const [busyId, setBusyId] = useState<string | null>(null);
+	const { data, error, loading, refetch } = useApi<{ users: AdminUser[] }>("/api/admin/users");
 	const [search, setSearch] = useState("");
 	const [roleFilter, setRoleFilter] = useState<"all" | "user" | "member" | "admin">("all");
+	const [busyId, setBusyId] = useState<string | null>(null);
+	const { toast, show, dismiss } = useToast();
+	const users = data?.users ?? [];
 
-	const load = useCallback(async () => {
-		setLoading(true);
-		setError(null);
-
-		const { data, error: listError } = await authClient.admin.listUsers({
-			query: { limit: 200, sortBy: "createdAt", sortDirection: "desc" },
+	const visible = useMemo(() => {
+		const needle = search.trim().toLowerCase();
+		return users.filter((user) => {
+			if (roleFilter !== "all" && (user.role ?? "user") !== roleFilter) return false;
+			if (!needle) return true;
+			return `${user.name} ${user.email}`.toLowerCase().includes(needle);
 		});
+	}, [users, search, roleFilter]);
 
-		if (listError) {
-			setError(
-				listError.message ??
-					"Could not list users. Confirm your account has role='admin' in the database.",
-			);
-			setUsers(null);
-		} else {
-			// The plugin returns an array of users; tolerate a wrapped shape.
-			const rows = Array.isArray(data) ? data : ((data as never as { users?: UserRow[] })?.users ?? []);
-			setUsers(rows as UserRow[]);
-		}
-		setLoading(false);
-	}, []);
-
-	useEffect(() => {
-		void load();
-	}, [load]);
-
-	/** Run a mutation, then reload so the table reflects server truth. */
-	async function run(userId: string, action: () => Promise<{ error: { message?: string } | null }>) {
+	async function mutate(userId: string, body: { role?: "user" | "member" | "admin"; banned?: boolean; banReason?: string | null }) {
 		setBusyId(userId);
-		setError(null);
-		const { error: actionError } = await action();
-		if (actionError) {
-			setError(actionError.message ?? "Action failed.");
-		} else {
-			await load();
+		try {
+			await apiSend(`/api/admin/users/${userId}`, { method: "PATCH", body });
+			show("success", "Access updated.");
+			refetch();
+		} catch (err) {
+			show("error", err instanceof Error ? err.message : "Could not update access.");
+		} finally {
+			setBusyId(null);
 		}
-		setBusyId(null);
 	}
 
-	const visible = (users ?? []).filter((u) => {
-		if (roleFilter !== "all" && (u.role ?? "user") !== roleFilter) return false;
-		if (!search.trim()) return true;
-		const needle = search.toLowerCase();
-		return (
-			u.email.toLowerCase().includes(needle) ||
-			(u.name ?? "").toLowerCase().includes(needle)
-		);
-	});
-
-	// CLIENT-SIDE BELT for the last-admin rule. The braces are server-side:
-	// databaseHooks in src/lib/auth.ts rejects the demotion with 400 even if
-	// this UI is bypassed entirely (curl, two tabs, a stale list…). This just
-	// makes the impossible action hard to click in the first place.
-	const adminCount = (users ?? []).filter((u) => u.role === "admin").length;
-	const lastAdminIsMe = me?.role === "admin" && adminCount === 1;
+	async function revokeSessions(userId: string) {
+		setBusyId(userId);
+		try {
+			await apiSend(`/api/admin/users/${userId}/revoke-sessions`, { method: "POST" });
+			show("success", "All active sessions revoked.");
+			refetch();
+		} catch (err) {
+			show("error", err instanceof Error ? err.message : "Could not revoke sessions.");
+		} finally {
+			setBusyId(null);
+		}
+	}
 
 	return (
-		<div>
-			<div className="spread" style={{ marginBottom: "1rem" }}>
-				<h2 style={{ margin: 0 }}>Users &amp; access</h2>
-				<div className="row">
+		<div className="page-stack">
+			<div className="glass-panel filter-panel">
+				<div className="filter-grid">
+					<label className="field-label">
+						<span>Search</span>
 						<input
 							className="input"
-							style={{ width: "14rem" }}
 							type="search"
-							placeholder="Filter by name or email…"
+							placeholder="Search by name or email…"
 							value={search}
-							aria-label="Filter users by name or email"
-							onChange={(e) => setSearch(e.target.value)}
+							onChange={(event) => setSearch(event.target.value)}
 						/>
+					</label>
+					<label className="field-label">
+						<span>Role</span>
 						<select
 							className="select"
-							style={{ width: "auto", padding: "0.45rem 0.6rem" }}
 							value={roleFilter}
-							aria-label="Filter users by role"
-							onChange={(e) => {
-								const v = e.target.value;
-								if (v === "all" || v === "user" || v === "member" || v === "admin") {
-									setRoleFilter(v);
-								}
-							}}
+							onChange={(event) => setRoleFilter(event.target.value as typeof roleFilter)}
 						>
-							<option value="all">All roles ({(users ?? []).length})</option>
-							<option value="user">user — no access</option>
-							<option value="member">member — projects</option>
-							<option value="admin">admin — full</option>
+							<option value="all">All roles</option>
+							<option value="user">user</option>
+							<option value="member">member</option>
+							<option value="admin">admin</option>
 						</select>
-						<button
-							type="button"
-							className="btn btn-sm"
-							onClick={() => void load()}
-							disabled={loading}
-						>
-							{loading ? <span className="spinner" /> : "Refresh"}
-						</button>
-					</div>
-			</div>
-
-			<div className="notice" style={{ marginBottom: "1rem" }}>
-				<p className="muted" style={{ margin: 0, fontSize: "0.9rem" }}>
-					<strong>How access works:</strong> anyone can sign in with Google, which
-					creates an account with role <code>user</code> — that grants nothing by
-					itself. Grant <code>member</code> to open <code>/projects</code> and the
-					project API; grant <code>admin</code> to open <code>/admin</code> and
-					manage users. Revoke by setting the role back to <code>user</code> (or
-					ban the account). Role changes reach an open tab within ~5 minutes —
-					session role is served from better-auth&apos;s cookie cache; use
-					&quot;Revoke sessions&quot; to cut sessions off, taking effect at the next
-					cache refresh.
-				</p>
+					</label>
+				</div>
+				<div className="spread" style={{ marginTop: "1rem" }}>
+					<p className="muted" style={{ margin: 0 }}>
+						Signed-in users start as <code>user</code>. Grant <code>member</code>
+						 for projects and <code>admin</code> for the dashboard.
+					</p>
+					<button type="button" className="btn btn-sm" onClick={refetch} disabled={loading}>
+						{loading ? <span className="spinner" /> : "Refresh"}
+					</button>
+				</div>
 			</div>
 
 			{error ? (
-				<div className="notice notice-danger" role="alert">
+				<div className="glass-panel notice notice-danger" role="alert">
 					{error}
 				</div>
 			) : null}
 
-			{loading && users === null ? (
-				<p className="dim">
-					<span
-						className="spinner"
-						style={{ display: "inline-block", verticalAlign: "middle" }}
-					/>{" "}
-					Loading users…
-				</p>
-			) : null}
-
-			{users !== null ? (
-				<div className="table-wrap">
-					<table>
-						<thead>
-							<tr>
-								<th>User</th>
-								<th>Role</th>
-								<th>Status</th>
-								<th>Joined</th>
-								<th style={{ textAlign: "right" }}>Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							{visible.length === 0 ? (
-								<tr>
-									<td colSpan={5} className="dim">
-										No users match that filter.
-									</td>
-								</tr>
-							) : (
-							visible.map((user) => (
-								<UserRowView
-									key={user.id}
-									user={user}
-									busy={busyId === user.id}
-									isSelf={user.id === me?.id}
-									blockDemotion={user.id === me?.id && lastAdminIsMe}
-									onSetRole={(role) =>
-											void run(user.id, () =>
-												authClient.admin.setRole({ userId: user.id, role }),
-											)
-										}
-										onBan={() =>
-											void run(user.id, () =>
-												authClient.admin.banUser({
-													userId: user.id,
-													banReason: "Access revoked by an administrator.",
-												}),
-											)
-										}
-										onUnban={() =>
-											void run(user.id, () =>
-												authClient.admin.unbanUser({ userId: user.id }),
-											)
-										}
-										onRevokeSessions={() =>
-											void run(user.id, () =>
-												authClient.admin.revokeUserSessions({ userId: user.id }),
-											)
-										}
-									/>
-								))
-							)}
-						</tbody>
-					</table>
+			{loading && users.length === 0 ? (
+				<div className="project-grid">
+					{Array.from({ length: 4 }, (_, index) => (
+						<div key={index} className="glass-panel">
+							<div className="skeleton" style={{ height: "1.25rem", width: "48%" }} />
+							<div className="skeleton" style={{ height: "1rem", marginTop: "0.7rem" }} />
+							<div className="skeleton" style={{ height: "1rem", marginTop: "0.5rem", width: "65%" }} />
+						</div>
+					))}
 				</div>
 			) : null}
+
+			{!loading && visible.length === 0 ? (
+				<div className="glass-panel empty-state">
+					<strong>No users match that filter.</strong>
+					<p className="muted">Try adjusting the search query or role filter.</p>
+				</div>
+			) : null}
+
+			<div className="user-grid">
+				{visible.map((user) => (
+					<div key={user.id} className="glass-panel user-card">
+						<div className="spread" style={{ alignItems: "flex-start" }}>
+							<div className="row row-tight" style={{ alignItems: "flex-start" }}>
+								{user.image ? (
+									<img className="avatar" src={user.image} alt="" width={36} height={36} referrerPolicy="no-referrer" />
+								) : (
+									<span className="avatar avatar-fallback" aria-hidden="true">
+										{user.name?.[0]?.toUpperCase() ?? user.email[0]?.toUpperCase() ?? "?"}
+									</span>
+								)}
+								<div>
+									<h3 style={{ marginBottom: "0.2rem" }}>{user.name || "Unnamed user"}</h3>
+									<p className="muted" style={{ margin: 0 }}>{user.email}</p>
+								</div>
+							</div>
+							<span className={user.banned ? "badge badge-danger" : "badge badge-success"}>
+								{user.banned ? "Suspended" : "Active"}
+							</span>
+						</div>
+
+						<div className="field-grid two-up">
+							<label className="field-label">
+								<span>Role</span>
+								<select
+									className="select"
+									value={user.role ?? "user"}
+									disabled={busyId === user.id}
+									onChange={(event) =>
+										void mutate(user.id, { role: event.target.value as "user" | "member" | "admin" })
+									}
+								>
+									<option value="user">user</option>
+									<option value="member">member</option>
+									<option value="admin">admin</option>
+								</select>
+							</label>
+							<div className="field-label">
+								<span>Status</span>
+								<div className="row row-tight">
+									<button
+										type="button"
+										className="btn btn-sm"
+										onClick={() => void mutate(user.id, { banned: !user.banned })}
+										disabled={busyId === user.id}
+									>
+										{user.banned ? "Restore" : "Suspend"}
+									</button>
+									<button
+										type="button"
+										className="btn btn-sm"
+										onClick={() => void revokeSessions(user.id)}
+										disabled={busyId === user.id}
+									>
+										Revoke sessions
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<div className="metrics-stack compact-metrics">
+							<UserDetail label="Joined" value={user.createdAt ? new Date(user.createdAt).toLocaleDateString() : "—"} />
+							<UserDetail label="Last sign-in" value={user.lastSignInAt ? new Date(user.lastSignInAt).toLocaleString() : "Never"} />
+							<UserDetail label="Active sessions" value={String(user.activeSessions)} />
+						</div>
+
+						{user.recentAccess.length ? (
+							<div className="user-access-log">
+								<strong>Recent access</strong>
+								<ul>
+									{user.recentAccess.map((entry) => (
+										<li key={entry}>{entry}</li>
+									))}
+								</ul>
+							</div>
+						) : null}
+
+						{busyId === user.id ? <div className="spinner user-card-spinner" aria-hidden="true" /> : null}
+					</div>
+				))}
+			</div>
+			<Toast toast={toast} dismiss={dismiss} />
 		</div>
 	);
 }
 
-function UserRowView({
-	user,
-	busy,
-	isSelf,
-	blockDemotion,
-	onSetRole,
-	onBan,
-	onUnban,
-	onRevokeSessions,
-}: {
-	user: UserRow;
-	busy: boolean;
-	isSelf: boolean;
-	blockDemotion: boolean;
-	onSetRole: (role: "admin" | "member" | "user") => void;
-	onBan: () => void;
-	onUnban: () => void;
-	onRevokeSessions: () => void;
-}) {
-	const role = user.role ?? "user";
-	const lockTitle = blockDemotion
-		? "You are the only administrator — grant another user the admin role before demoting yourself."
-		: undefined;
-
+function UserDetail({ label, value }: { label: string; value: string }) {
 	return (
-		<tr>
-			<td>
-				<div className="row" style={{ flexWrap: "nowrap" }}>
-					{user.image ? (
-						<img
-							className="avatar"
-							src={user.image}
-							alt=""
-							width={30}
-							height={30}
-							referrerPolicy="no-referrer"
-						/>
-					) : (
-						<span className="avatar avatar-fallback" aria-hidden="true">
-							{(user.name ?? user.email)?.[0]?.toUpperCase() ?? "?"}
-						</span>
-					)}
-					<div style={{ minWidth: 0 }}>
-						<div style={{ fontWeight: 550 }}>
-							{user.name}
-							{isSelf ? (
-								<span className="dim" style={{ fontWeight: 400 }}>
-									{" "}
-									(you)
-								</span>
-							) : null}
-						</div>
-						<div className="dim" style={{ overflowWrap: "anywhere" }}>
-							{user.email}
-						</div>
-					</div>
-				</div>
-			</td>
-
-			<td>
-				<select
-					className="select"
-					style={{ width: "auto", padding: "0.3rem 0.5rem", fontSize: "0.85rem" }}
-					value={role}
-					disabled={busy}
-					aria-label={`Role for ${user.email}`}
-					title={lockTitle}
-					onChange={(e) => {
-						const next = e.target.value;
-						if (next === "admin" || next === "member" || next === "user") {
-							onSetRole(next);
-						}
-					}}
-				>
-					<option value="user" disabled={blockDemotion}>
-						user — no access
-					</option>
-					<option value="member" disabled={blockDemotion}>
-						member — projects
-					</option>
-					<option value="admin">admin — full</option>
-				</select>
-			</td>
-
-			<td>
-				{user.banned ? (
-					<span className="badge badge-danger" title={user.banReason ?? undefined}>
-						banned
-					</span>
-				) : (
-					<span className="badge badge-success">active</span>
-				)}
-			</td>
-
-			<td className="dim">{formatJoined(user.createdAt)}</td>
-
-			<td>
-				<div className="row" style={{ justifyContent: "flex-end" }}>
-					{busy ? <span className="spinner" /> : null}
-					{user.banned ? (
-						<button type="button" className="btn btn-sm" onClick={onUnban} disabled={busy}>
-							Unban
-						</button>
-					) : (
-						<button
-							type="button"
-							className="btn btn-sm btn-danger"
-							onClick={onBan}
-							disabled={busy}
-						>
-							Ban
-						</button>
-					)}
-					<button
-						type="button"
-						className="btn btn-sm"
-						onClick={onRevokeSessions}
-						disabled={busy}
-						title="End every active session for this user"
-					>
-						Revoke sessions
-					</button>
-				</div>
-			</td>
-		</tr>
+		<div className="metric-inline metric-inline-wide">
+			<span>{label}</span>
+			<strong>{value}</strong>
+		</div>
 	);
-}
-
-function formatJoined(value: string | Date | number | null | undefined): string {
-	if (value === null || value === undefined) return "—";
-	const d = value instanceof Date ? value : new Date(value);
-	if (Number.isNaN(d.getTime())) return "—";
-	return d.toLocaleDateString();
 }
