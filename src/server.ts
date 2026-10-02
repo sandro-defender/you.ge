@@ -40,6 +40,7 @@ import { syncGithubRepos } from "./server/github-sync";
 import { gatePage, serverErrorPage } from "./server/gate-page";
 import { INTERNAL_SESSION_HEADER as SESSION_HEADER } from "./lib/internal-header";
 import { ADMIN_ROLES, PROJECT_ROLES, hasRole } from "./lib/roles";
+import { apiRequestUrl } from "./lib/api-url";
 import type { Env } from "./lib/env";
 
 const app = createApp();
@@ -141,7 +142,7 @@ export default {
 		// ── 1. API → Hono ───────────────────────────────────────────────────
 		if (pathname === "/api" || pathname.startsWith("/api/")) {
 			const apiRequest = new Request(
-				new URL(pathname.slice("/api".length) || "/", url),
+				apiRequestUrl(url),
 				cleanRequest,
 			);
 			return app.fetch(apiRequest, env, ctx);
