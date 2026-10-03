@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "staff.you.ge — implemented architecture",
+    "subtitle": "React/TanStack Start, Cloudflare Worker, better-auth, and D1 at revision 8afaeaf",
+    "output": ".archify/architecture-staff-you-ge-20261003-004127/staff-you-ge.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/sandro-defender/you.ge.git",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "8afaeaf4ea005c7030d4bdd10dc06e37d2dcafe3"
+    },
+    "views": [
+      {
+        "id": "project-read",
+        "label": "Load projects",
+        "focus": ["visitor", "react-ui", "worker", "member-gate", "project-api", "d1"],
+        "note": "A signed-in member loads visible projects from D1 through the Worker API."
+      },
+      {
+        "id": "admin-save",
+        "label": "Admin saves curation",
+        "focus": ["admin", "react-ui", "worker", "admin-gate", "admin-api", "d1"],
+        "note": "Only admins can save repository curation fields to D1."
+      },
+      {
+        "id": "sign-in",
+        "label": "Google sign-in",
+        "focus": ["visitor", "react-ui", "google", "worker", "auth", "d1"],
+        "note": "Google OAuth is enabled only when both Google credentials are configured."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "visitor",
+      "type": "external",
+      "label": "Visitor / member",
+      "sublabel": "Browser at you.ge",
+      "pos": [35, 355],
+      "size": [138, 58],
+      "sources": [{ "path": "src/routes/projects.tsx", "line": 60, "end_line": 64, "label": "same-origin request" }]
+    },
+    {
+      "id": "admin",
+      "type": "external",
+      "label": "Administrator",
+      "sublabel": "Browser session with admin role",
+      "pos": [35, 535],
+      "size": [138, 58],
+      "sources": [{ "path": "src/server.ts", "line": 99, "end_line": 105, "label": "admin path policy" }]
+    },
+    {
+      "id": "google",
+      "type": "external",
+      "label": "Google OAuth",
+      "sublabel": "Identity provider",
+      "pos": [275, 235],
+      "size": [150, 62],
+      "sources": [{ "path": "src/lib/auth.ts", "line": 58, "end_line": 71, "label": "Google provider" }]
+    },
+    {
+      "id": "react-ui",
+      "type": "frontend",
+      "label": "React + TanStack Start",
+      "sublabel": "SSR pages and browser UI",
+      "pos": [275, 355],
+      "size": [170, 64],
+      "sources": [
+        { "path": "src/router.tsx", "line": 1, "end_line": 20, "label": "router entry" },
+        { "path": "src/routes/login.tsx", "line": 52, "end_line": 76, "label": "Google sign-in" },
+        { "path": "src/routes/projects.tsx", "line": 50, "end_line": 83, "label": "project load" }
+      ]
+    },
+    {
+      "id": "password-disabled",
+      "type": "security",
+      "label": "Password sign-in",
+      "sublabel": "Disabled — no password access path",
+      "tag": "NOT IMPLEMENTED",
+      "pos": [275, 540],
+      "size": [170, 64],
+      "sources": [{ "path": "src/lib/auth.ts", "line": 74, "end_line": 80, "label": "email/password disabled" }]
+    },
+    {
+      "id": "worker",
+      "type": "cloud",
+      "label": "Cloudflare Worker",
+      "sublabel": "fetch() routes API and gated SSR",
+      "pos": [555, 355],
+      "size": [185, 68],
+      "sources": [
+        { "path": "src/server.ts", "line": 107, "end_line": 149, "label": "Worker API route" },
+        { "path": "wrangler.jsonc", "line": 76, "end_line": 105, "label": "D1 and cron" }
+      ]
+    },
+    {
+      "id": "member-gate",
+      "type": "security",
+      "label": "Member gate",
+      "sublabel": "Session + member/admin role required",
+      "pos": [850, 510],
+      "size": [185, 64],
+      "sources": [{ "path": "src/server.ts", "line": 151, "end_line": 206, "label": "page authorization" }]
+    },
+    {
+      "id": "admin-gate",
+      "type": "security",
+      "label": "Admin permissions",
+      "sublabel": "Session + admin role required",
+      "pos": [555, 635],
+      "size": [185, 64],
+      "sources": [{ "path": "src/server/guard.ts", "line": 37, "end_line": 54, "label": "admin middleware" }]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "better-auth",
+      "sublabel": "OAuth callback, sessions, admin plugin",
+      "pos": [850, 120],
+      "size": [190, 64],
+      "sources": [
+        { "path": "src/server/auth-routes.ts", "line": 31, "end_line": 49, "label": "auth route handler" },
+        { "path": "src/lib/auth.ts", "line": 92, "end_line": 126, "label": "admin roles" }
+      ]
+    },
+    {
+      "id": "project-api",
+      "type": "backend",
+      "label": "Projects API",
+      "sublabel": "GET /api/projects → visible repos",
+      "pos": [850, 355],
+      "size": [190, 64],
+      "sources": [{ "path": "src/server/repos-router.ts", "line": 15, "end_line": 33, "label": "visible repo query" }]
+    },
+    {
+      "id": "admin-api",
+      "type": "backend",
+      "label": "Admin API",
+      "sublabel": "PATCH /api/admin/repos/:id",
+      "pos": [850, 635],
+      "size": [190, 64],
+      "sources": [{ "path": "src/server/admin-router.ts", "line": 32, "end_line": 88, "label": "curation update" }]
+    },
+    {
+      "id": "d1",
+      "type": "database",
+      "label": "Cloudflare D1",
+      "sublabel": "users, sessions, repos, sync_log",
+      "pos": [1145, 355],
+      "size": [180, 70],
+      "sources": [
+        { "path": "wrangler.jsonc", "line": 76, "end_line": 86, "label": "DB binding" },
+        { "path": "src/db/schema-app.ts", "line": 26, "end_line": 76, "label": "repos schema" },
+        { "path": "src/db/schema-auth.ts", "line": 4, "end_line": 32, "label": "user/session schema" }
+      ]
+    }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "you.ge application", "wraps": ["react-ui", "password-disabled", "worker", "member-gate", "admin-gate", "auth", "project-api", "admin-api", "d1"], "pad": 30 },
+    { "kind": "security-group", "label": "gated access controls", "wraps": ["member-gate", "admin-gate"], "pad": 18 }
+  ],
+  "connections": [
+    { "id": "visitor-ui", "from": "visitor", "to": "react-ui", "label": "HTTPS /projects", "variant": "emphasis" },
+    { "id": "ui-google", "from": "react-ui", "to": "google", "label": "OAuth redirect", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "id": "google-auth", "from": "google", "to": "auth", "label": "callback /api/auth/callback/google", "variant": "security" },
+    { "id": "ui-worker", "from": "react-ui", "to": "worker", "label": "HTTPS /api/projects", "variant": "emphasis" },
+    { "id": "worker-auth", "from": "worker", "to": "auth", "label": "/api/auth/*", "variant": "security", "fromSide": "top", "toSide": "bottom" },
+    { "id": "worker-member", "from": "worker", "to": "member-gate", "label": "validate session + role", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "member-project-api", "from": "member-gate", "to": "project-api", "label": "GET allowed", "variant": "emphasis", "fromSide": "right", "toSide": "bottom" },
+    { "id": "project-read", "from": "project-api", "to": "d1", "label": "SELECT visible repos", "variant": "emphasis" },
+    { "id": "admin-ui", "from": "admin", "to": "react-ui", "label": "HTTPS /admin", "variant": "emphasis" },
+    { "id": "worker-admin", "from": "worker", "to": "admin-gate", "label": "validate admin role", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "id": "admin-api-write", "from": "admin-gate", "to": "admin-api", "label": "PATCH allowed", "variant": "emphasis", "fromSide": "right", "toSide": "left" },
+    { "id": "project-save", "from": "admin-api", "to": "d1", "label": "UPDATE curation fields", "variant": "emphasis" },
+    { "id": "auth-persist", "from": "auth", "to": "d1", "label": "users, accounts, sessions", "variant": "security", "fromSide": "bottom", "toSide": "top" }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "Tips: not implemented at this revision",
+      "items": [
+        "No `tip` or `tips` identifier was found in the application source, schema, routes, or API handlers.",
+        "There is therefore no tips load path or save path to trace.",
+        "The implemented equivalent data flow is project/repository loading and admin curation shown above."
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Project loading (implemented)",
+      "items": [
+        "The projects page fetches /api/projects with same-origin session cookies.",
+        "The Worker gates access, then the Projects API selects non-hidden repositories from D1."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Saving (implemented)",
+      "items": [
+        "An admin may PATCH featured, hidden, sortOrder, or customDescription for a repository.",
+        "The allowlisted patch writes to D1; it is not a tips save operation."
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Access controls (implemented)",
+      "items": [
+        "Google OAuth creates a default user; it does not grant project access by itself.",
+        "Password/email sign-in is explicitly disabled; member and admin access are role-gated."
+      ]
+    }
+  ]
+}

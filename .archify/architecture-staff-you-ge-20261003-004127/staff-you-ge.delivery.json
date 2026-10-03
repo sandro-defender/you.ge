@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "c9fec4f4-5228-4b64-bea7-045ab8fb66a4",
+  "status": "current",
+  "command": "deliver",
+  "type": "architecture",
+  "input": "D:\\MyProjects\\you.ge\\.archify\\architecture-staff-you-ge-20261003-004127\\candidate.json",
+  "output": "D:\\MyProjects\\you.ge\\.archify\\architecture-staff-you-ge-20261003-004127\\staff-you-ge.html",
+  "specification": {
+    "sha256": "e5e5a321c32d987795e4af4b48dd6eb54f3fea370fac33f6d43aa74757596435",
+    "bytes": 9189
+  },
+  "artifact": {
+    "sha256": "547c5f25f0cf7b0c2463e62512b33d9503fbe8ee39cf9fa4ef668afd62914112",
+    "bytes": 778622
+  }
+}
