@@ -45,7 +45,7 @@ contradict popular tutorials; each one says why and how it was verified.
 >    do not redesign it (details in §3, architecture notes in §4b).
 >
 > **What is done:** everything under §3 "✅ Done and verified", including the
-> role gate, the `/api/auth` path-prefix bugfix, `README.md`, a 20/20 green
+> role gate, the `/api/auth` path-prefix bugfix, `README.md`, a 40/40 green
 > `scripts/role-matrix-smoke.sh`, and the R1 local-prep session (root layout,
 > `you.ge` prefix safety rule, `grant-admin.mjs`, owner deploy runbook).
 >
@@ -58,6 +58,9 @@ contradict popular tutorials; each one says why and how it was verified.
 > next agent.
 >
 > After any change: re-run §5 (tsc, build, leak check, smoke, role matrix).
+>
+> **Latest audit:** `docs/agent-handoff.md` (2026-10-14 quality pass) records
+> exactly which checks ran, what was fixed, and what is still blocked.
 
 ---
 
@@ -301,8 +304,9 @@ Requirements, verbatim from the user:
     deliberately NOT set — Twitter falls back to og:*, keeping the
     override chain single-sourced. Gated routes keep the generic card, so
     no project/user data can appear in a share preview (and anonymous
-    scrapers only ever see the 302 anyway). og:image is
-    `public/og.jpg` — 1200×630, 16 KB, AI-generated to the site palette
+    scrapers only ever see the 302 anyway). og:image was
+    `public/og.jpg` (superseded by `public/og-image.jpg` in PR #7) —
+    1200×630, 16 KB, AI-generated to the site palette
     (#0a0a0f / #7c6cff); the owner can replace the file (same name or
     update the meta).
   - **Soft-404 BUG found and fixed:** the `$` splat rendered the branded
@@ -417,16 +421,27 @@ Requirements, verbatim from the user:
   repos_visible_sort_idx`; remote tail/dashboard verification remains owner-run
   and intentionally skipped under the no-Cloudflare-interaction rule.
 
+- **Quality audit (2026-10-14, see `docs/agent-handoff.md`):** fixed the
+  unreachable project-detail route (it was nested under `/projects` with no
+  `<Outlet />`), member-only case-study fields leaking from the public
+  `/api/public/home`, a suspended admin keeping a session that better-auth's
+  `/api/auth/admin/*` still accepted (e.g. self-unban), comma-role gaps in
+  both last-admin guards, the service worker reloading pages on first visit
+  and on every deploy, SPA links bypassing the Worker gate, unread counts
+  capped at the page size, and drizzle metadata missing the 0001 snapshot.
+  New suites: `npm test` (8 offline unit suites) and
+  `scripts/admin-guard-smoke.mjs` (12 HTTP checks).
+
 ### ❌ Not done (→ §6 ROADMAP)
 
-- `database_id` still placeholder (owner runs the README "First deploy"
-  runbook: `d1 create you-ge-main` → paste uuid → `d1:safety` →
-  `db:migrate:remote` → secrets → `deploy`). No Google OAuth creds yet (R2);
-  no real admin row yet (grant-admin needs the owner's first Google sign-in).
+- `database_id` is no longer a placeholder: commit `e157ef9` (2026-09-27)
+  pinned the real `you-ge-main` id. `npm run d1:safety` therefore performs a
+  remote `wrangler d1 info` and needs Cloudflare credentials — it exits 1 in
+  a credential-less sandbox and must stay owner-run. Agents cannot verify
+  production state (secrets, admin row, deploy) from here.
 - `?next=` open-redirect guard now unit+HTTP tested (R4, 22/22), but the
-  **post-Google-login round-trip** is still untested end-to-end (needs real
-  Google creds, R2).
-- Error-boundary route, SEO/OG tags: not started (R6/R7).
+  **post-Google-login round-trip** is still untested end-to-end by agents
+  (needs real Google creds, R2).
 
 ---
 
@@ -530,8 +545,9 @@ Runtime facts verified against installed better-auth 1.7.5 source:
 ```bash
 npx tsc --noEmit                 # expect: 0 errors
 rm -rf dist && npx vite build    # expect: success (rm first: empty-dist = false-clean leak check)
-npm run d1:safety                # expect: exit 1, BLOCKED on placeholder id
-                                 #         (exit 0 only after d1:setup wired a real id)
+npm test                         # expect: 8 offline unit suites pass
+# npm run d1:safety — OWNER-RUN ONLY: database_id is real (e157ef9), so it does a
+#                     remote `wrangler d1 info`; without credentials it exits 1.
 node scripts/d1-safety-check.mjs --self-test   # 11/11 ownership-logic checks (offline)
 node scripts/d1-setup.mjs --self-test          # 7/7 create/wire checks (offline)
 # leak check — every line must say clean:
@@ -550,6 +566,7 @@ npx wrangler d1 execute DB --local --file /tmp/seed.sql   # only if fixtures mis
 # would create a new one and the safety checks apply from scratch).
 bash scripts/role-matrix-smoke.sh          # expect: pass=40 fail=0
 npm run test:next                          # expect: pass=22 fail=0 (http half needs the dev server)
+node scripts/admin-guard-smoke.mjs         # expect: pass=12 fail=0 (re-seeds local fixtures)
 ```
 
 > `better-auth` WILL appear in `dist/client/` — that's the legitimate client
@@ -578,12 +595,11 @@ Baseline smoke (no cookies) — all green as of last run:
 | `GET /api/health` | 200 |
 | `GET /projects`, `/projects/foo`, `/admin`, `/admin/users` | 302 → `login?next=…` |
 | `GET /api/projects`, `/api/admin/repos` | 401 |
-| any of the above **+ forged `x-youge-session`** | still 302/401 |
-| `GET /projects` **with a forged `x-youge-session: {"role":"admin",…}` header** | **302**, *not* 200 — the header is stripped before anything reads it |
+| any of the above **+ forged `x-youge-session: {"role":"admin",…}`** | still 302/401, *not* 200 — the header is stripped before anything reads it |
 | `GET /robots.txt` | **200**, `text/plain` — Disallow /projects /admin /login /api/, Sitemap line (R7) |
 | `GET /sitemap.xml` | **200**, `application/xml`, contains only `https://you.ge/` (the sole indexable URL) |
 | `GET /totally-bogus` | **404** with the branded Not Found body — *not* a 200 soft-404 (R7) |
-| `GET /og.jpg` | **200**, `image/jpeg` — share-card image (1200×630) |
+| `GET /og-image.jpg` | **200**, `image/jpeg` — share-card image (1200×630) |
 
 Role matrix (`scripts/role-matrix-smoke.sh`, 40 checks = 10 unit + 30 HTTP, last run **40/40**):
 
@@ -671,7 +687,7 @@ deployment work and two taste/policy calls. Round details preserved below.
 | R4 | UX polish | **✅ 2026-09-23** (gate pages, retry, cards, ?next guard) |
 | R5 | Admin UX | **✅ 2026-09-23** (users + repos workflows, last-admin guard) |
 | R6 | Security + errors | **✅ 2026-09-24** (matrix 40/40, safeLoader, page headers) — rate limiting left to owner decision |
-| R7 | SEO / share cards | **✅ 2026-09-24** (indexable `/`, OG cards, real 404s) — og.jpg is a placeholder the owner may swap |
+| R7 | SEO / share cards | **✅ 2026-09-24** (indexable `/`, OG cards, real 404s) — the card is now `og-image.jpg` (PR #7); the owner may swap it |
 | R8 | Owner docs + archive | **✅ 2026-09-24** (this runbook + archive) |
 
 ### BACKLOG (nice-to-haves, deliberately not built)
@@ -679,8 +695,9 @@ deployment work and two taste/policy calls. Round details preserved below.
 1. **Rate limiting on `/api/auth/*`** — owner decision (accept documented
    risk vs a tiny D1 counter). Current stance: documented as accepted risk
    in README; all auth is Google OAuth (no password endpoints).
-2. **Replace `public/og.jpg`** with a personal image (1200×630, same
-   filename or update the og:image meta).
+2. **Replace `public/og-image.jpg`** with a personal image (1200×630, same
+   filename or update the og:image/twitter:image meta). `public/og.jpg` is
+   the unreferenced R7 original.
 3. **Prod re-run of the suites** after first deploy — matrix/next-guard are
    local-only by design; the owner can spot-check the same curls against
    `https://you.ge`.
@@ -888,8 +905,8 @@ no stack traces in any 500 body (verified against the production build).
 
 *Acceptance:* ✅ view-source on `/` shows correct OG tags (verified dev +
 built preview); ✅ `/projects` 403/member HTML has no project names in
-`<head>`. Owner may want to replace `public/og.jpg` (AI-generated
-placeholder, 1200×630, 16 KB) with a personal image — keep the name or
+`<head>`. Owner may want to replace the share card — since PR #7 that is
+`public/og-image.jpg` (1200×630) — with a personal image; keep the name or
 update the og:image/twitter:image meta.
 
 ---
@@ -1015,6 +1032,15 @@ Each was verified against the installed packages, not memory.
     The errorComponent/Worker-catch layers never render error.message, so
     nothing user-facing is lost.
 
+16. **Hono's `secureHeaders()` only covers `/api/*`.** Pages are rendered by
+    `startHandler` in `src/server.ts` and never pass through Hono, so the
+    HTML documents — the clickjacking/sniffing surface that matters most —
+    shipped with NO security headers until R6 added
+    `PAGE_SECURITY_HEADERS` + `withSecurityHeaders()` there (mirroring
+    hono's defaults exactly; gate pages carry the same set inline). If you
+    customise `secureHeaders` in `app.ts`, mirror the change in
+    `server.ts` — drift between the halves is invisible to API-only curls.
+
 17. **TanStack head merge + the soft-404 splat trap.** Route `head()`
     meta entries dedupe by `name`/`property` and the MOST-SPECIFIC route
     wins (verified in installed `react-router/dist/esm/headContentUtils.js`
@@ -1026,15 +1052,6 @@ Each was verified against the installed packages, not memory.
     branded UI must live in the root `notFoundComponent` to get a real
     404. On the not-found path the splat's own `head()` does NOT apply
     (root title shows).
-
-16. **Hono's `secureHeaders()` only covers `/api/*`.** Pages are rendered by
-    `startHandler` in `src/server.ts` and never pass through Hono, so the
-    HTML documents — the clickjacking/sniffing surface that matters most —
-    shipped with NO security headers until R6 added
-    `PAGE_SECURITY_HEADERS` + `withSecurityHeaders()` there (mirroring
-    hono's defaults exactly; gate pages carry the same set inline). If you
-    customise `secureHeaders` in `app.ts`, mirror the change in
-    `server.ts` — drift between the halves is invisible to API-only curls.
 
 ---
 
@@ -1084,7 +1101,11 @@ offline via `--self-test` (7/7).
 ```
 .                              ← repo root = the whole project (owner-settled)
 ├── HANDOVER.md                    ← this file
-├── package.json                   scripts: dev/build/deploy/db:*/d1:*/auth:*
+├── README.md                      deploy runbook + architecture (§5, R1–R2)
+├── CHANGELOG.md                   user-visible changes
+├── DEPLOYMENT_SUMMARY.md          PR #7 deployment notes
+├── docs/agent-handoff.md          latest audit evidence (checks, blockers, next action)
+├── package.json                   scripts: dev/build/deploy/test/db:*/d1:*/auth:*
 ├── wrangler.jsonc                 main=src/server.ts, D1 binding (name you-ge*),
 │                                  cron */6h, you.ge custom-domain route
 ├── vite.config.ts                 cloudflare({viteEnvironment:{name:"ssr"}}) FIRST
@@ -1093,17 +1114,26 @@ offline via `--self-test` (7/7).
 ├── worker-configuration.d.ts      GENERATED (604 kB) — commit it
 ├── .dev.vars.example              documents every secret + Google redirect URIs
 ├── .gitignore                     ignores .dev.vars, dist/, .wrangler/, .output/
-├── README.md                      deploy runbook + architecture (§5, R1–R2)
 ├── scripts/
 │   ├── d1-safety-check.mjs        migration guard (§8) — fail-closed row parse
-│   ├── d1-setup.mjs               read-only DB listing (§8)
+│   ├── d1-setup.mjs               DB listing; creates + wires you-ge-main if none (§8)
 │   ├── grant-admin.mjs            role grant/revoke via wrangler d1 (§7.13)
 │   ├── jsonc.mjs                  string-aware wrangler.jsonc parser (§3)
 │   ├── seed-local-test-users.mjs  fixtures + --cookies (§5)
-│   ├── role-matrix-smoke.sh       20-check E2E gate test (§5)
-│   └── next-guard-test.mjs        ?next= open-redirect tests: 16 unit + 6 HTTP
+│   ├── role-matrix-smoke.sh       40-check E2E gate test (§5)
+│   ├── next-guard-test.mjs        ?next= open-redirect tests: 16 unit + 6 HTTP
+│   ├── admin-guard-smoke.mjs      12-check E2E test of the admin write paths (§5)
+│   └── *-test.mjs                 offline unit suites run by `npm test`
 ├── drizzle/
-│   └── 0000_volatile_thena.sql    6 tables + indexes
+│   ├── 0000_volatile_thena.sql    6 tables + indexes
+│   ├── 0001_premium_showcase.sql  curation columns, audit_log, notifications
+│   └── meta/                      journal + snapshots (drizzle-kit diff base)
+├── public/
+│   ├── og-image.jpg               1200×630 share-card image (og:image)
+│   ├── og.jpg                     legacy R7 card — unreferenced
+│   ├── service-worker.js          PWA worker (gated paths bypassed)
+│   ├── offline.html               offline fallback
+│   └── site.webmanifest           PWA manifest (+ favicons, brand/)
 └── src/
     ├── server.ts                  ⭐ Worker entry: gating + /api routing + cron
     ├── router.tsx                 must export getRouter (§7.3)
@@ -1112,19 +1142,27 @@ offline via `--self-test` (7/7).
     ├── db/
     │   ├── schema.ts              barrel
     │   ├── schema-auth.ts         GENERATED by better-auth — don't hand-edit
-    │   └── schema-app.ts          repos + sync_log, curated columns
+    │   └── schema-app.ts          repos, sync_log, audit_log, notifications
     ├── lib/
     │   ├── env.ts                 Env = Cloudflare.Env & Secrets
     │   ├── db.ts                  createDb(d1)
     │   ├── roles.ts               ⭐ leaf: ROLES/hasRole fail-closed (§4b)
     │   ├── auth-roles.ts          siteRoles + memberAc, client-safe (§4b)
+    │   ├── admin-guards.ts        last-admin + self-suspension guard (both paths)
     │   ├── auth.ts                ⭐ createAuth(env) — admin({roles:siteRoles})
     │   ├── auth-client.ts         adminClient({roles}) + useAuthSession (§7.1)
     │   ├── internal-header.ts     leaf module, no deps (§4)
     │   ├── next.ts                sanitiseNext — ?next= guard, leaf (R4)
-    │   ├── session-fn.ts          createServerFn reading that header
-    │   ├── safe-loader.ts       sanitising loader wrapper — no error leak (R6)
-    │   ├── types.ts               PublicProject/AdminRepo/SyncRun (client+server)
+    │   ├── session-fn.ts          getServerSession + loadSessionForRender (SSR only)
+    │   ├── safe-loader.ts         sanitising loader wrapper — no error leak (R6)
+    │   ├── api-url.ts             /api strip for Hono, query preserved
+    │   ├── repo-ranking.ts        scoring, featured selection, filters
+    │   ├── public-teaser.ts       strips member-only fields from public payloads
+    │   ├── notifications.ts       notification audiences per user
+    │   ├── pwa.ts                 SW registration + controllerchange decision
+    │   ├── analytics.ts           trackEvent (window CustomEvent only)
+    │   ├── chunk-items.ts         bounded D1 write batches
+    │   ├── types.ts               types shared by client + server (leaf)
     │   └── use-api.ts             useApi + apiSend, no TanStack Query
     ├── server/
     │   ├── app.ts                 Hono root: services → secureHeaders → routes
@@ -1132,28 +1170,35 @@ offline via `--self-test` (7/7).
     │   ├── auth-routes.ts         ⭐ re-prefixes /api before auth.handler (§3)
     │   ├── guard.ts               requireSession, requireAdmin, requireMember
     │   ├── gate-page.ts           branded 403 gate pages, escaped (R4)
-    │   ├── repos-router.ts        /projects, /projects/by-slug (indexed reads)
-    │   ├── admin-router.ts        /admin/repos, PATCH (200-char desc cap), /sync, /sync-log
-    │   └── github-sync.ts         ⭐ cron sync, single multi-row upsert
+    │   ├── public-router.ts       /public/home (unauthenticated)
+    │   ├── account-router.ts      /me/notifications (any signed-in user)
+    │   ├── repos-router.ts        /projects, /projects/:owner/:name (members)
+    │   ├── admin-router.ts        overview, repo curation, sync, users, audit
+    │   ├── project-data.ts        row → public/admin/detail mapping
+    │   ├── audit.ts               audit log + notifications
+    │   └── github-sync.ts         ⭐ cron/manual sync, batched upserts
     ├── components/
     │   ├── Nav.tsx                session-aware nav (public routes: get-session)
+    │   ├── ClientRuntime.tsx      offline + update-ready banners
+    │   ├── ProjectCard.tsx        project card (home + library)
+    │   ├── NotFound.tsx           branded 404 body
     │   ├── SyncNowButton.tsx      sync + poll sync-log + result toast (R5)
-    │   └── Toast.tsx              useToast + one-slot toast, a11y roles (R5)
+    │   └── Toast.tsx              useToast + one-slot toast, live regions (R5)
     └── routes/
         ├── __root.tsx             head(): meta/OG defaults, noindex default,
         │                          notFoundComponent, errorComponent (R6/R7)
         ├── index.tsx              public landing, the only indexable route (R7)
         ├── login.tsx              Google sign-in, sanitised ?next= (open-redirect guard)
-        ├── projects.tsx           gated; useEffect fetch (§4)
+        ├── projects.tsx           gated library; useEffect fetch (§4)
+        ├── projects_.$owner.$name.tsx  gated detail — `_` keeps it un-nested
+        ├── notifications.tsx      gated inbox
+        ├── settings.tsx           gated preferences
         ├── $.tsx                  splat → throws notFound() → real 404 (R7)
         └── admin/
             ├── route.tsx          layout + tabs
             ├── index.tsx          overview + sync status
-            ├── users.tsx          ⭐ grant/revoke access via authClient.admin.*
-            └── repos.tsx          feature/hide/reorder/custom description
-
-public/
-└── og.jpg                        1200×630 share-card image (og:image, R7)
+            ├── users.tsx          ⭐ grant/revoke/suspend via PATCH /api/admin/users/:id
+            └── repos.tsx          curation: featured/hidden/order/copy/case study
 ```
 
 ---

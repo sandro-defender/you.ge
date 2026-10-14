@@ -1,10 +1,13 @@
 import { Link, Outlet, createFileRoute } from "@tanstack/react-router";
-import { getServerSession, type SessionUser } from "../../lib/session-fn";
+import { loadSessionForRender, type SessionUser } from "../../lib/session-fn";
 import { safeLoader } from "../../lib/safe-loader";
 
 export const Route = createFileRoute("/admin")({
 	head: () => ({ meta: [{ title: "Admin — you.ge" }] }),
-	loader: safeLoader(async () => ({ session: await getServerSession() })),
+	loader: safeLoader(async () => ({ session: await loadSessionForRender() })),
+	// Keep the SSR-loaded session while switching admin tabs: in the browser
+	// the loader can only return null (see loadSessionForRender).
+	staleTime: Infinity,
 	component: AdminLayout,
 });
 

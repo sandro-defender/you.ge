@@ -61,3 +61,22 @@ export const getServerSession = createServerFn({ method: "GET" }).handler(
 		}
 	},
 );
+
+/**
+ * Route-loader helper: the validated session during the SERVER render,
+ * `null` in the browser.
+ *
+ * The internal header only exists on gated page requests. A client-side
+ * navigation (or an intent preload) calls getServerSession() through
+ * TanStack Start's /_serverFn/* RPC endpoint instead, which is not a gated
+ * path, so the Worker never attaches the header and the answer is always
+ * null — verified over HTTP with a valid member cookie. Skipping that RPC
+ * saves a Worker request per client-side navigation.
+ *
+ * Callers must treat null as "unknown here", never as "signed out": the
+ * Worker entry has already enforced access for any SSR'd gated page.
+ */
+export async function loadSessionForRender(): Promise<SessionUser | null> {
+	if (typeof window !== "undefined") return null;
+	return getServerSession();
+}

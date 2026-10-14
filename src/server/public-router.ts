@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
 import { repos, syncLog } from "../db/schema";
+import { toPublicTeaser } from "../lib/public-teaser";
 import type { HomeData, HomeTopic } from "../lib/types";
 import { buildPublicProjects } from "./project-data";
 import type { AppContext } from "./app";
@@ -15,9 +16,11 @@ export function createPublicRouter() {
 			db.select().from(syncLog).orderBy(desc(syncLog.runAt)).limit(1),
 		]);
 		const projects = buildPublicProjects(rows);
+		// This endpoint is public: strip the member-only case-study fields.
 		const featuredProjects = projects
 			.filter((project) => project.showOnHomepage)
-			.slice(0, 6);
+			.slice(0, 6)
+			.map(toPublicTeaser);
 
 		const payload: HomeData = {
 			summary: {

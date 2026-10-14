@@ -1,4 +1,4 @@
-import type { AuthInstance } from "../lib/env";
+import type { AuthInstance, Env } from "../lib/env";
 import { createDb, type Database } from "../lib/db";
 import { createAuth } from "../lib/auth";
 
@@ -20,11 +20,11 @@ export type Services = {
 	auth: AuthInstance;
 };
 
-export function createServices(env: Cloudflare.Env): Services {
+export function createServices(env: Env): Services {
 	const db = createDb(env.DB);
 	// createAuth builds its own Drizzle wrapper internally, so this is two
 	// wrappers — but both are created here, once, for this request only.
-	const auth = createAuth(env as unknown as import("../lib/env").Env);
+	const auth = createAuth(env);
 	return { db, auth };
 }
 

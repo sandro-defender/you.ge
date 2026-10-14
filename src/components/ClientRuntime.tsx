@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
-import { registerAppServiceWorker } from "../lib/pwa";
+import { createControllerChangeHandler, registerAppServiceWorker } from "../lib/pwa";
 
 export function ClientRuntime() {
-	const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+	// Start "online" on BOTH server and client so hydration matches; the real
+	// value is read in the effect below (reading navigator.onLine during the
+	// first render made an offline load hydrate differently from the SSR HTML).
+	const [online, setOnline] = useState(true);
 	const [waiting, setWaiting] = useState<ServiceWorkerRegistration | null>(null);
 
 	useEffect(() => {
+		setOnline(navigator.onLine);
 		const onOnline = () => setOnline(true);
 		const onOffline = () => setOnline(false);
 		window.addEventListener("online", onOnline);
@@ -20,7 +24,12 @@ export function ClientRuntime() {
 			/* ignore */
 		});
 
-		const onControllerChange = () => window.location.reload();
+		// Reload only when an update replaces an existing controller — the
+		// first install's clients.claim() must not reload a first visit.
+		const onControllerChange = createControllerChangeHandler(
+			Boolean(navigator.serviceWorker?.controller),
+			() => window.location.reload(),
+		);
 		navigator.serviceWorker?.addEventListener?.("controllerchange", onControllerChange);
 
 		return () => {

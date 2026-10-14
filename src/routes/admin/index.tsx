@@ -25,7 +25,14 @@ function AdminHome() {
 				<div className="row">
 					<SyncNowButton onFinished={refetch} label="Sync now" />
 					<button type="button" className="btn btn-sm" onClick={refetch} disabled={loading}>
-						{loading ? <span className="spinner" /> : "Refresh"}
+						{loading ? (
+							<>
+								<span className="spinner" aria-hidden="true" />
+								<span className="sr-only">Refreshing…</span>
+							</>
+						) : (
+							"Refresh"
+						)}
 					</button>
 				</div>
 			</div>

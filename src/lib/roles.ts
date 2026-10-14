@@ -12,17 +12,21 @@
  *            check `role === "admin"` in the database — two layers, see
  *            src/server/guard.ts).
  *
- * Grants/revokes happen from the admin panel's Users page via better-auth's
- * setRole. Roles are stored as a single comma-separated string by better-auth
- * (`"admin"` / `"member"` / `"user"`, or `"admin,member"` if ever combined),
- * so every check below splits on commas — never compare `role === "member"`
+ * Grants/revokes happen from the admin panel's Users page, which calls the
+ * app's own PATCH /api/admin/users/:id (src/server/admin-router.ts); better-
+ * auth's /api/auth/admin/set-role stays available too, and both paths share
+ * the last-admin guard in ./admin-guards.ts. Roles are stored as a single
+ * comma-separated string (`"admin"` / `"member"` / `"user"`, or
+ * `"admin,member"` — better-auth's setRole joins role arrays with ","), so
+ * every check below splits on commas — never compare `role === "member"`
  * directly.
  *
- * Verified against better-auth 1.7.5's admin plugin: setRole validates the
- * value against a configured `roles` map ONLY if that option is provided; we
- * don't provide one, so any of these strings is accepted and written to
- * `user.role` (plain `text` column, no CHECK constraint — verified in
- * drizzle/0000_*.sql).
+ * Verified against better-auth 1.7.5's admin plugin: setRole validates each
+ * value against the configured `roles` map when one is provided — and
+ * src/lib/auth.ts passes `roles: siteRoles`, so an unknown role name is
+ * rejected with 400. The column itself is plain `text` with no CHECK
+ * constraint (drizzle/0000_*.sql), so direct SQL can still write anything —
+ * which is why hasRole() fails closed on unknown strings.
  */
 
 export const ROLES = ["admin", "member", "user"] as const;

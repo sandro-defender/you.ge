@@ -5,15 +5,26 @@ import type { PublicProject } from "../lib/types";
 export function ProjectCard({
 	project,
 	compact = false,
+	reloadDocument = false,
 }: {
 	project: PublicProject;
 	compact?: boolean;
+	/**
+	 * Set on PUBLIC pages (the homepage): the detail route is member-gated,
+	 * and only a full document load lets the Worker entry answer with a 302
+	 * to /login or a 403 gate page instead of rendering the page shell.
+	 */
+	reloadDocument?: boolean;
 }) {
-	const to = `/projects/${project.owner}/${project.name}`;
+	const linkProps = {
+		to: "/projects/$owner/$name",
+		params: { owner: project.owner, name: project.name },
+		reloadDocument,
+	} as const;
 
 	return (
 		<article className={`project-panel ${compact ? "project-panel-compact" : ""}`}>
-			<Link to={to} className="project-panel-link" aria-label={`Open ${project.title}`}>
+			<Link {...linkProps} className="project-panel-link" aria-label={`Open ${project.title}`}>
 				<div className="project-media" aria-hidden="true">
 					{project.image ? (
 						<img
@@ -49,9 +60,9 @@ export function ProjectCard({
 					</div>
 				</div>
 
-				<div className="project-tags" aria-label="Technologies">
+				<div className="project-tags" role="list" aria-label="Technologies">
 					{project.tags.slice(0, compact ? 4 : 6).map((tag) => (
-						<span key={tag} className="tag-chip">
+						<span key={tag} className="tag-chip" role="listitem">
 							{tag}
 						</span>
 					))}
@@ -65,7 +76,7 @@ export function ProjectCard({
 				</div>
 
 				<div className="row project-actions">
-					<Link to={to} className="btn btn-sm btn-primary">
+					<Link {...linkProps} className="btn btn-sm btn-primary">
 						Read case study
 					</Link>
 					<a className="btn btn-sm" href={project.url} target="_blank" rel="noreferrer noopener">

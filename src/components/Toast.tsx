@@ -5,9 +5,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * workflows — the alternative (a queue) buys nothing at this scale and costs
  * layout + focus-management complexity.
  *
- * Accessibility: success/info toasts are role=status (polite), errors are
- * role=alert (assertive), so screen readers announce outcomes of background
- * actions (like the GitHub sync) without moving focus.
+ * Accessibility: success/info messages go to a polite role=status region,
+ * errors to an assertive role=alert region, so screen readers announce the
+ * outcome of background actions (like the GitHub sync) without moving focus.
+ * Both regions stay mounted while empty — a live region inserted together
+ * with its text is not reliably announced — and are visually hidden; the
+ * visible toast itself carries no role, so nothing is announced twice.
  */
 
 export type ToastKind = "success" | "error" | "info";
@@ -49,22 +52,27 @@ export function Toast({
 	toast: ToastState;
 	dismiss: () => void;
 }) {
-	if (!toast) return null;
 	return (
-		<div
-			className={`toast toast-${toast.kind}`}
-			role={toast.kind === "error" ? "alert" : "status"}
-			aria-live={toast.kind === "error" ? "assertive" : "polite"}
-		>
-			<span>{toast.message}</span>
-			<button
-				type="button"
-				className="toast-close"
-				aria-label="Dismiss notification"
-				onClick={dismiss}
-			>
-				×
-			</button>
-		</div>
+		<>
+			<div className="sr-only" role="status">
+				{toast && toast.kind !== "error" ? toast.message : ""}
+			</div>
+			<div className="sr-only" role="alert">
+				{toast?.kind === "error" ? toast.message : ""}
+			</div>
+			{toast ? (
+				<div className={`toast toast-${toast.kind}`}>
+					<span>{toast.message}</span>
+					<button
+						type="button"
+						className="toast-close"
+						aria-label="Dismiss notification"
+						onClick={dismiss}
+					>
+						×
+					</button>
+				</div>
+			) : null}
+		</>
 	);
 }

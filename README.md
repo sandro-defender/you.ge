@@ -41,13 +41,14 @@ Other everyday commands:
 | `npm run build` | Production build → `dist/server/` (Worker) + `dist/client/` (assets) |
 | `npm run preview` | Preview the built worker locally |
 | `npm run typecheck` | `tsc --noEmit` — must stay at 0 errors |
-| `npm run d1:safety` | D1 migration guard (see [D1 safety](#d1-safety)) — **expect exit 1 while `database_id` is a placeholder** |
+| `npm run d1:safety` | D1 migration guard (see [D1 safety](#d1-safety--non-negotiable)). `database_id` has been the real `you-ge-main` id since commit `e157ef9`, so this now makes a **remote** read (`wrangler d1 info`) and needs Cloudflare credentials — **owner-run only**; without credentials it exits 1. Agents run the offline `node scripts/d1-safety-check.mjs --self-test` instead |
 | `npm run d1:setup` | Lists every D1 database (read-only, marks others DO NOT TOUCH); **creates `you-ge-main` and wires its id into wrangler.jsonc only if no `you-ge*` database exists yet** |
 | `npm run db:migrate:local` | Apply `drizzle/` migrations to the **local** Miniflare DB |
 | `npm run db:generate` | Generate a migration from schema changes (drizzle-kit) |
 | `npm run db:studio` | Drizzle Studio (local DB) |
 | `npm run auth:grant-admin` | Grant/revoke a role for a signed-in user (`node scripts/grant-admin.mjs you@example.com`) — **not** the better-auth CLI (see HANDOVER §7) |
 | `npm run auth:info` | Print better-auth runtime info |
+| `npm test` | All offline unit suites, no server needed: ranking/filtering, admin-permission guards, notification audiences, PWA registration, sync batching, public homepage payload, service worker, API URL rewrite |
 | `npm run test:next` | Open-redirect guard tests for `?next=` (16 unit cases + 6 HTTP probes; HTTP part needs the dev server, add `--strict` to require it) |
 | `npm run cf-typegen` | Regenerate `worker-configuration.d.ts` from `wrangler.jsonc` |
 | `npm run deploy` | `vite build` + `wrangler deploy -c dist/server/wrangler.json` |
@@ -67,11 +68,10 @@ From HANDOVER §5 — all must hold with **no cookies**:
 | `GET /admin`, `GET /admin/users` | **302** |
 | `GET /api/projects`, `GET /api/admin/repos` | **401** |
 | `GET /projects` **with a forged `x-youge-session: {"role":"admin",…}` header** | **302**, *not* 200 — the header is stripped before anything reads it |
-| `GET /projects` **with a forged `x-youge-session: {"role":"admin",…}` header** | **302**, *not* 200 — the header is stripped before anything reads it |
 | `GET /robots.txt` | **200**, `text/plain` — Disallow /projects /admin /login /api/, Sitemap line (R7) |
 | `GET /sitemap.xml` | **200**, `application/xml`, contains only `https://you.ge/` (the sole indexable URL) |
 | `GET /totally-bogus` | **404** with the branded Not Found body — *not* a 200 soft-404 (R7) |
-| `GET /og.jpg` | **200**, `image/jpeg` — the share-card image (1200×630) |
+| `GET /og-image.jpg` | **200**, `image/jpeg` — the share-card image (1200×630) referenced by `og:image` / `twitter:image` |
 
 Client-bundle leak check after `npm run build` (all must say `clean`):
 
@@ -88,13 +88,14 @@ done
 > `GITHUB_USERNAME` / `GITHUB_TOKEN` as *UI hint text* for the empty state —
 > names, never values.
 
-With fixtures + the dev server up, also run the two behavioural suites (both
+With fixtures + the dev server up, also run the three behavioural suites (all
 local-only):
 
 | Script | What it asserts |
 |---|---|
 | `bash scripts/role-matrix-smoke.sh` | 40 checks (10 unit + 30 HTTP): `hasRole` unit attack-table + page/API rows for no-session/user/member/admin/expired/banned/garbage-role, member→`/api/auth/admin/list-users` 403, forged-header probes. The page 403s are the designed gate pages (`src/server/gate-page.ts`) — **the copy is load-bearing**, the script matches on `not been granted` / `Administrator` |
 | `npm run test:next` | 22 checks: the `?next=` open-redirect guard — unit attack-table against `src/lib/next.ts` + HTTP probes that `/login?next=…` never redirects off-origin and the gate 302 preserves the encoded destination |
+| `node scripts/admin-guard-smoke.mjs` | 12 checks on the admin **write** paths (`PATCH /api/admin/users/:id` and better-auth's `/api/auth/admin/*`): no self-suspension, suspension deletes the target's sessions (so a suspended admin cannot call `unban-user` on themselves), last-admin guards honour comma roles (`admin,member`). It changes fixture state, so it re-seeds the local D1 before each scenario and at the end (`wrangler d1 execute DB --local` only) |
 
 ---
 
@@ -160,12 +161,20 @@ Page refusals render the branded gate pages from `src/server/gate-page.ts`
 bodies — change them together or neither.
 
 **Last-admin protection:** better-auth 1.7.5 does NOT stop the only admin
-from demoting themselves (verified in the installed source). A
-`databaseHooks.user.update.before` guard in `src/lib/auth.ts` rejects any
-role demotion from `admin` when it would leave zero admins — 400 with an
-explanatory message, covering both `/admin/set-role` and
-`/admin/update-user`. `scripts/grant-admin.mjs` bypasses hooks by design:
-it is the lockout recovery tool.
+from demoting themselves (verified in the installed source). Both write
+paths share one pure, unit-tested guard (`canChangeAdminState` in
+`src/lib/admin-guards.ts`, comma-role aware via `hasRole`):
+
+* the admin UI's own `PATCH /api/admin/users/:id` (`src/server/admin-router.ts`)
+  refuses to demote or suspend the last *active* admin, refuses
+  self-suspension, and deletes the target's sessions on suspension — exactly
+  like better-auth's own `banUser`;
+* a `databaseHooks.user.update.before` hook in `src/lib/auth.ts` applies the
+  same rule to better-auth's `/admin/set-role` and `/admin/update-user`.
+
+Both answer 400 with an explanatory message.
+`scripts/grant-admin.mjs` bypasses hooks by design: it is the lockout
+recovery tool.
 
 Admin bootstrap: sign in with Google once (creates the `user` row), then
 `node scripts/grant-admin.mjs you@example.com` — a `user.role` UPDATE through
@@ -194,7 +203,7 @@ factory-based D1 config (HANDOVER §7).
 - **Known, accepted gap (owner call pending):** no rate limiting on
   `/api/auth/*` — Workers Free has none built-in.
 - **SEO (R7):** the ONLY indexable page is `/` (robots `index, follow`,
-  canonical, OG/Twitter card with `public/og.jpg`); every other route
+  canonical, OG/Twitter card with `public/og-image.jpg`); every other route
   inherits a fail-closed `noindex` default, gate pages also send
   `X-Robots-Tag: noindex`, and `robots.txt`/`sitemap.xml` are served at the
   Worker entry (no deps). Unknown paths return a real **404** (the `$`
@@ -249,7 +258,7 @@ prefix or ownership checks.**
 
 Run from the repo root, in order. The D1 name must start with the reserved
 prefix `you-ge` (recommended concrete name: `you-ge-main` — the scripts
-enforce the prefix; see [D1 safety](#d1-safety)):
+enforce the prefix; see [D1 safety](#d1-safety--non-negotiable)):
 
 ```bash
 npm run d1:setup                                   # lists existing DBs; creates
@@ -407,7 +416,7 @@ All of it happens on **/admin/users** (sign in as an admin):
 | Action | Effect | When it lands |
 |---|---|---|
 | Role → `user` | loses `/projects` (member gate 403) | next request; an **already-open browser tab** can keep access up to ~5 min (session `cookieCache`, see `src/lib/auth.ts` — accepted trade-off) |
-| Ban | signs them out everywhere (sessions deleted) + suspended page if they sign back in | same ~5-min worst case for an open tab |
+| Suspend | signs them out everywhere (sessions deleted); signing back in is refused while suspended. You cannot suspend your own account | better-auth's own `/api/auth/admin/*` endpoints check D1 directly, so a suspended admin loses them immediately; pages and `/api/*` keep the same ~5-min open-tab worst case |
 | Revoke sessions | signs them out everywhere, keeps the account | same |
 | Role → `member` | grants `/projects` | immediate on their next request |
 
@@ -558,7 +567,7 @@ Each was verified against the installed packages. **Do not “fix” these.**
     green.
 
 15. **`wrangler.jsonc` comment stripping must be string-aware**
-    (`scripts/jsonc.mjs`). See [D1 safety](#d1-safety).
+    (`scripts/jsonc.mjs`). See [D1 safety](#d1-safety--non-negotiable).
 
 ---
 
@@ -568,6 +577,9 @@ Each was verified against the installed packages. **Do not “fix” these.**
 .                              ← repo root = the whole project
 ├── HANDOVER.md                 ← full handover: state, architecture, research notes
 ├── README.md                   ← this file
+├── CHANGELOG.md                user-visible changes
+├── DEPLOYMENT_SUMMARY.md       PR #7 (premium showcase) deployment notes
+├── docs/agent-handoff.md       latest audit evidence: checks run, blockers, next action
 ├── package.json                scripts (see Quick start)
 ├── wrangler.jsonc              main=src/server.ts, D1 binding, cron */6h, you.ge route
 ├── vite.config.ts              cloudflare() FIRST, then tanstackStart(), react(),
@@ -577,16 +589,22 @@ Each was verified against the installed packages. **Do not “fix” these.**
 ├── worker-configuration.d.ts   GENERATED by `npm run cf-typegen` — commit it
 ├── .dev.vars.example           every secret + Google redirect URIs documented
 ├── public/
-│   └── og.jpg                   1200×630 share-card image (og:image)
+│   ├── og-image.jpg            1200×630 share-card image (og:image / twitter:image)
+│   ├── og.jpg                  legacy R7 card — no longer referenced by the code
+│   ├── service-worker.js       PWA worker: shell/static caching, gated paths bypassed
+│   ├── offline.html            offline fallback page
+│   └── site.webmanifest        PWA manifest (+ favicons, brand/ logos)
 ├── scripts/
 │   ├── d1-safety-check.mjs     migration guard (runs before any --remote)
-│   ├── d1-setup.mjs            read-only DB listing
+│   ├── d1-setup.mjs            lists DBs read-only; creates + wires you-ge-main if none
 │   ├── grant-admin.mjs         role grant/revoke via wrangler d1 (admin bootstrap)
+│   ├── jsonc.mjs               string-aware wrangler.jsonc parser (shared)
 │   ├── seed-local-test-users.mjs  local fixtures + --cookies
 │   ├── role-matrix-smoke.sh    40-check E2E gate test (10 unit + 30 HTTP)
 │   ├── next-guard-test.mjs     ?next= open-redirect guard tests (unit + HTTP)
-│   └── jsonc.mjs               string-aware wrangler.jsonc parser (shared)
-├── drizzle/                    migrations (drizzle-kit output)
+│   ├── admin-guard-smoke.mjs   12-check E2E test of the admin write paths (local D1)
+│   └── *-test.mjs              offline unit suites run by `npm test`
+├── drizzle/                    migrations (drizzle-kit output) + meta/ snapshots
 └── src/
     ├── server.ts               ⭐ Worker entry: forgery guard + gating + /api + cron
     ├── router.tsx              must export getRouter (fact #3)
@@ -597,34 +615,56 @@ Each was verified against the installed packages. **Do not “fix” these.**
     ├── db/                     schema barrel + schema-auth (generated) + schema-app
     ├── lib/
     │   ├── env.ts              Env = Cloudflare.Env & Secrets (fact #10)
+    │   ├── db.ts               createDb(d1)
+    │   ├── roles.ts            ⭐ leaf: ROLES / hasRole (comma-split, fail-closed)
+    │   ├── auth-roles.ts       siteRoles access-control map, client-safe
+    │   ├── admin-guards.ts     last-admin / self-suspension guard (both write paths)
     │   ├── auth.ts             createAuth(env) factory — per request
     │   ├── auth-client.ts      browser client + useAuthSession() (fact #1)
     │   ├── internal-header.ts  leaf module, no deps
     │   ├── next.ts             sanitiseNext — ?next= open-redirect guard (leaf)
-    │   ├── session-fn.ts       createServerFn reading the internal header
-    │   ├── safe-loader.ts       sanitising loader wrapper — no error leakage
-    │   ├── types.ts            PublicProject/AdminRepo/SyncRun (client+server)
+    │   ├── session-fn.ts       getServerSession (reads the internal header) +
+    │   │                       loadSessionForRender (SSR only, null in the browser)
+    │   ├── safe-loader.ts      sanitising loader wrapper — no error leakage
+    │   ├── api-url.ts          /api prefix strip for Hono (keeps the query string)
+    │   ├── repo-ranking.ts     scoring, featured selection, filters, time labels
+    │   ├── public-teaser.ts    strips member-only case-study fields (public payload)
+    │   ├── notifications.ts    audience list for a user (admin + personal)
+    │   ├── pwa.ts              service-worker registration + reload decision
+    │   ├── analytics.ts        trackEvent → window CustomEvent (no third party)
+    │   ├── chunk-items.ts      bounded batches for D1 writes
+    │   ├── types.ts            types shared by client + server (leaf)
     │   └── use-api.ts          useApi + apiSend, no TanStack Query
     ├── server/
     │   ├── app.ts              Hono root: services → secureHeaders → routes
     │   ├── context.ts          createServices(env) — one per request
-    │   ├── auth-routes.ts      sub.all("/*") → auth.handler(raw)
-    │   ├── guard.ts            requireSession, requireAdmin
+    │   ├── auth-routes.ts      re-prefixes /api, then auth.handler(raw)
+    │   ├── guard.ts            requireSession, requireMember, requireAdmin
     │   ├── gate-page.ts        branded 403 gate pages (Worker-rendered, escaped)
-    │   ├── repos-router.ts     /projects, /projects/by-slug (indexed reads)
-    │   ├── admin-router.ts     /admin/repos CRUD + /sync + /sync-log (200-char desc cap)
-    │   └── github-sync.ts      ⭐ cron sync, single multi-row upsert
+    │   ├── public-router.ts    /public/home — unauthenticated homepage data
+    │   ├── account-router.ts   /me/notifications (+ mark read) — any signed-in user
+    │   ├── repos-router.ts     /projects, /projects/:owner/:name — members
+    │   ├── admin-router.ts     /admin overview, repo curation, sync, users, audit
+    │   ├── project-data.ts     row → PublicProject / AdminRepo / detail mapping
+    │   ├── audit.ts            audit log + notification writes and feeds
+    │   └── github-sync.ts      ⭐ cron/manual sync, batched upserts (5 rows)
     ├── components/
-    │   ├── Nav.tsx             session-aware nav
-    │   ├── NotFound.tsx          branded 404 body (root notFoundComponent)
+    │   ├── Nav.tsx             session-aware nav, unread badge
+    │   ├── ClientRuntime.tsx   offline banner + service-worker update banner
+    │   ├── ProjectCard.tsx     project card (home + library)
+    │   ├── NotFound.tsx        branded 404 body (root notFoundComponent)
     │   ├── SyncNowButton.tsx   sync → poll sync-log → outcome toast
-    │   └── Toast.tsx           one-slot toast, a11y roles
+    │   └── Toast.tsx           one-slot toast + persistent live regions
     └── routes/
         ├── __root.tsx          ⭐ document shell + head()/OG defaults +
         │                          notFound/error components (facts #13/#17)
-        ├── index.tsx           public landing
+        ├── index.tsx           public landing (the only indexable route)
         ├── login.tsx           Google sign-in, sanitised ?next= (open-redirect guard)
-        ├── projects.tsx        gated; useEffect fetch (HANDOVER §4)
+        ├── projects.tsx        gated library; client-side filters
+        ├── projects_.$owner.$name.tsx   gated project detail (NOT nested in
+        │                          projects.tsx — the trailing `_` un-nests it)
+        ├── notifications.tsx   gated inbox (any signed-in user)
+        ├── settings.tsx        gated preferences (any signed-in user)
         ├── $.tsx               splat → notFound() → real 404 (fact #17)
         └── admin/              layout + overview + users (grant/revoke) + repos
 ```
@@ -639,9 +679,13 @@ Each was verified against the installed packages. **Do not “fix” these.**
   `assets` block in `wrangler.jsonc`.
 * **Never add a session `refetchInterval`.** Polling burns both the 100k
   req/day Worker budget and D1 rows-read (HANDOVER §10).
-* **Admin curation survives syncs by design:** `github-sync.ts` upsert
-  excludes `featured`, `hidden`, `sortOrder`, `customDescription` from its
-  `set` list — do not “optimize” those columns into the upsert.
+* **Admin curation survives syncs by design:** the `github-sync.ts` upsert
+  `set` list carries only GitHub facts (name, description, stars, topics,
+  timestamps, score…). Every curation column — `featured`,
+  `featuredOverride`, `hidden`, `showOnHomepage`, `sortOrder`,
+  `manualPriority`, `custom*`, `imageAlt`, `category`, `challenge`,
+  `solution`, `caseStudy` — is deliberately absent; do not “optimize” them
+  into the upsert.
 * **Import protection:** client code must not import from server modules,
   *even for types* — the bundler resolves the module graph before type
   erasure. Shared types live in `src/lib/types.ts` (dependency-free leaf).

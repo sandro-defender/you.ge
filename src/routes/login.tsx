@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { signIn, useAuthSession } from "../lib/auth-client";
 // Open-redirect guard for `?next=` — a dependency-free leaf so
 // scripts/next-guard-test.mjs can unit-test it (see lib/next.ts).
@@ -24,7 +24,6 @@ export const Route = createFileRoute("/login")({
 
 function Login() {
 	const { next } = Route.useSearch();
-	const navigate = useNavigate();
 	const { user, isPending } = useAuthSession();
 	const [error, setError] = useState<string | null>(null);
 	const [working, setWorking] = useState(false);
@@ -34,10 +33,13 @@ function Login() {
 		return (
 			<div className="center-screen">
 				<div>
-					<h2>You're already signed in</h2>
+					<h1 style={{ fontSize: "1.75rem" }}>You're already signed in</h1>
 					<p className="muted">Signed in as {user.email}</p>
 					<div className="row" style={{ justifyContent: "center" }}>
-						<Link to="/projects" className="btn btn-primary">
+						{/* Full document load: /projects is gated, and only the Worker
+						    entry can answer 302/403 — a client-side hop would render
+						    the page shell without that check. */}
+						<Link to="/projects" reloadDocument className="btn btn-primary">
 							Go to projects
 						</Link>
 						<Link to="/" className="btn">
@@ -72,11 +74,10 @@ function Login() {
 			);
 			return;
 		}
-		// On success better-auth navigates the browser to Google, so there is
-		// nothing to render afterwards.
-		if (target.startsWith("/") && target !== "/login") {
-			void navigate({ to: target });
-		}
+		// On success better-auth's redirect plugin has already set
+		// window.location.href to Google, so there is nothing left to do: keep
+		// the "Redirecting…" state. (A client-side navigate() here raced that
+		// redirect and briefly rendered the gated target without the gate.)
 	}
 
 	return (

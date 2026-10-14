@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { getServerSession, type SessionUser } from "../lib/session-fn";
+import { loadSessionForRender, type SessionUser } from "../lib/session-fn";
 import { safeLoader } from "../lib/safe-loader";
 
 const BROWSER_ALERT_PREF = "youge:browser-alerts-enabled";
 
 export const Route = createFileRoute("/settings")({
 	head: () => ({ meta: [{ title: "Settings — you.ge" }] }),
-	loader: safeLoader(async () => ({ session: await getServerSession() })),
+	loader: safeLoader(async () => ({ session: await loadSessionForRender() })),
 	component: SettingsPage,
 });
 
@@ -46,8 +46,9 @@ function SettingsPage() {
 				<p className="eyebrow">Settings</p>
 				<h1>Personal preferences</h1>
 				<p className="muted page-subtitle">
-					Signed in as {session?.email ?? "your account"}. Manage optional browser
-					alerts and understand how the portfolio behaves offline.
+					{session?.email ? `Signed in as ${session.email}. ` : null}Manage
+					optional browser alerts and understand how the portfolio behaves
+					offline.
 				</p>
 			</section>
 

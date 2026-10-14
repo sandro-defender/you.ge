@@ -1,15 +1,9 @@
 import { Hono } from "hono";
 import { desc, eq } from "drizzle-orm";
 import { notifications, repos, session, syncLog, user } from "../db/schema";
-import { canChangeAdminState } from "../lib/admin-guards";
+import { canChangeAdminState, countOtherActiveAdmins } from "../lib/admin-guards";
 import type { Database } from "../lib/db";
-import type {
-	AdminOverview,
-	AdminUser,
-	AuditEntry,
-	NotificationItem,
-	SyncRun,
-} from "../lib/types";
+import type { AdminOverview, AdminUser, AuditEntry, SyncRun } from "../lib/types";
 import type { AppContext } from "./app";
 import { kickoffGithubSync, refreshFeaturedFlags } from "./github-sync";
 import { notificationFeed, notifyAdmins, notifyUser, recentAuditEntries, writeAudit } from "./audit";
@@ -245,11 +239,13 @@ export function createAdminRouter() {
 		}
 
 		const { db } = c.get("services");
+		const actor = c.get("session").user;
 		const current = await db.query.user.findFirst({ where: eq(user.id, targetId) });
 		if (!current) return c.json({ error: "User not found" }, 404);
 
 		const patch: Partial<typeof user.$inferInsert> = {};
 		const remainingAdmins = await countAvailableAdmins(db, targetId);
+		const actingOnSelf = targetId === actor.id;
 		if (body.role !== undefined && body.role !== current.role) {
 			const guard = canChangeAdminState({
 				currentRole: current.role,
@@ -257,6 +253,7 @@ export function createAdminRouter() {
 				nextRole: body.role,
 				nextBanned: typeof body.banned === "boolean" ? body.banned : Boolean(current.banned),
 				remainingOtherAdmins: remainingAdmins,
+				actingOnSelf,
 			});
 			if (!guard.ok) return c.json({ error: guard.reason }, 400);
 			patch.role = body.role;
@@ -268,6 +265,7 @@ export function createAdminRouter() {
 				nextRole: body.role ?? current.role,
 				nextBanned: body.banned,
 				remainingOtherAdmins: remainingAdmins,
+				actingOnSelf,
 			});
 			if (!guard.ok) return c.json({ error: guard.reason }, 400);
 			patch.banned = body.banned;
@@ -285,7 +283,14 @@ export function createAdminRouter() {
 		const next = updated[0];
 		if (!next) return c.json({ error: "User not found" }, 404);
 
-		const actor = c.get("session").user;
+		// A suspension must also sign the user out everywhere, exactly like
+		// better-auth's own banUser. better-auth's admin middleware checks that
+		// a session exists but never looks at `banned`, so a surviving session
+		// let a suspended admin call /api/auth/admin/unban-user on themselves.
+		if (patch.banned === true) {
+			await db.delete(session).where(eq(session.userId, targetId));
+		}
+
 		await writeAudit(db, {
 			action: "user.updated",
 			entityType: "user",
@@ -398,8 +403,10 @@ function applyNullableCopy<T extends Record<string, unknown>>(
 }
 
 async function countAvailableAdmins(db: Database, excludingId: string) {
-	const rows = await db.select().from(user);
-	return rows.filter((row) => row.id !== excludingId && row.role === "admin" && !row.banned).length;
+	const rows = await db
+		.select({ id: user.id, role: user.role, banned: user.banned })
+		.from(user);
+	return countOtherActiveAdmins(rows, excludingId);
 }
 
 function clamp(value: number, min: number, max: number) {

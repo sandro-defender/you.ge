@@ -36,7 +36,9 @@ export const Route = createRootRoute({
 		],
 		links: [
 			{ rel: "stylesheet", href: appStyles },
-			{ rel: "canonical", href: "https://you.ge/" },
+			// No canonical here: only `/` (src/routes/index.tsx) declares one
+			// (R7). A root-level canonical pointed /login, the 404 page and every
+			// gated page at the homepage — a conflicting signal on noindex pages.
 			{ rel: "icon", href: "/favicon.ico", sizes: "any" },
 			{ rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
 			{ rel: "icon", type: "image/png", href: "/favicon-32x32.png", sizes: "32x32" },
@@ -94,8 +96,8 @@ function RootError({ reset }: { error: unknown; reset: () => void }) {
 			</head>
 			<body>
 				<Nav />
-				<main className="shell" style={{ paddingTop: "3rem" }}>
-					<div className="glass-panel error-panel" aria-labelledby="err-title">
+				<main className="shell" id="content" style={{ paddingTop: "3rem" }}>
+					<section className="glass-panel error-panel" aria-labelledby="err-title">
 						<span className="badge badge-danger">500 · Server error</span>
 						<h1 id="err-title">Something went wrong</h1>
 						<p className="muted">
@@ -110,7 +112,7 @@ function RootError({ reset }: { error: unknown; reset: () => void }) {
 								Back to home
 							</a>
 						</div>
-					</div>
+					</section>
 				</main>
 				<Scripts />
 			</body>

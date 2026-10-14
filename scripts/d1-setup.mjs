@@ -21,7 +21,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync, existsSync, writeFileSync, mkdtempSync, rmSync, cpSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { parseJsonc } from "./jsonc.mjs";
@@ -71,7 +71,7 @@ function wireDatabaseIdIntoText(text, uuid) {
 	const re = /("database_id"\s*:\s*")[^"]*(")/;
 	const count = (text.match(new RegExp(re.source, "g")) ?? []).length;
 	if (count !== 1) {
-		throw new Error(`expected exactly one \"database_id\": \"…\" value in wrangler.jsonc, found ${count}`);
+		throw new Error(`expected exactly one "database_id": "…" value in wrangler.jsonc, found ${count}`);
 	}
 	return text.replace(re, `$1${uuid}$2`);
 }
@@ -233,7 +233,7 @@ const run = (args) =>
 let out;
 try {
 	out = run(["d1", "create", createName, "--json"]);
-} catch (errJson) {
+} catch {
 	// --json may be rejected by older wranglers before any API call happens;
 	// a plain retry is safe ONLY then. If it was auth/network, the retry
 	// fails the same way and we surface it.
