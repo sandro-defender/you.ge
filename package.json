@@ -26,7 +26,10 @@
     "test:notifications": "node scripts/notifications-test.mjs",
     "test:pwa": "node scripts/pwa-registration-test.mjs",
     "test:sync-batching": "node scripts/github-sync-batch-test.mjs",
-    "test": "npm run test:ranking && npm run test:admin && npm run test:notifications && npm run test:pwa && npm run test:sync-batching",
+    "test:public-home": "node scripts/public-home-test.mjs",
+    "test:service-worker": "node scripts/service-worker-test.mjs",
+    "test:api-url": "node scripts/api-url-test.mjs",
+    "test": "npm run test:ranking && npm run test:admin && npm run test:notifications && npm run test:pwa && npm run test:sync-batching && npm run test:public-home && npm run test:service-worker && npm run test:api-url",
     "typecheck": "tsc --noEmit",
     "deploy:dry": "vite build && wrangler deploy -c dist/server/wrangler.json --dry-run"
   },

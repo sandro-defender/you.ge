@@ -1,13 +1,13 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Toast, useToast } from "../components/Toast";
-import { getServerSession, type SessionUser } from "../lib/session-fn";
+import { loadSessionForRender, type SessionUser } from "../lib/session-fn";
 import { safeLoader } from "../lib/safe-loader";
 import type { NotificationFeed, NotificationItem } from "../lib/types";
 import { apiSend, useApi } from "../lib/use-api";
 
 export const Route = createFileRoute("/notifications")({
 	head: () => ({ meta: [{ title: "Inbox — you.ge" }] }),
-	loader: safeLoader(async () => ({ session: await getServerSession() })),
+	loader: safeLoader(async () => ({ session: await loadSessionForRender() })),
 	component: NotificationsPage,
 });
 

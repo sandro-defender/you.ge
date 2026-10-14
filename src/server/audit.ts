@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { auditLog, notifications } from "../db/schema";
 import type { Database } from "../lib/db";
 import type { AuditEntry, NotificationItem } from "../lib/types";
@@ -87,12 +87,20 @@ export async function notificationFeed(
 ): Promise<{ items: NotificationItem[]; unreadCount: number }> {
 	const audience = options.audience.length === 1 ? options.audience[0] : null;
 	const where = audience ? eq(notifications.audience, audience) : inArray(notifications.audience, options.audience);
-	const rows = await db
-		.select()
-		.from(notifications)
-		.where(where)
-		.orderBy(desc(notifications.createdAt))
-		.limit(options.limit ?? 30);
+	const [rows, unread] = await Promise.all([
+		db
+			.select()
+			.from(notifications)
+			.where(where)
+			.orderBy(desc(notifications.createdAt))
+			.limit(options.limit ?? 30),
+		// Counted separately (index-backed by notifications_audience_idx):
+		// deriving it from `rows` capped every unread badge at the page size.
+		db
+			.select({ count: sql<number>`count(*)` })
+			.from(notifications)
+			.where(and(where, isNull(notifications.readAt))),
+	]);
 	const items = rows.map((row) => ({
 		id: row.id,
 		kind: row.kind,
@@ -106,7 +114,7 @@ export async function notificationFeed(
 	}));
 	return {
 		items,
-		unreadCount: items.filter((item) => item.readAt === null).length,
+		unreadCount: Number(unread[0]?.count ?? 0),
 	};
 }
 

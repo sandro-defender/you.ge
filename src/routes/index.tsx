@@ -52,10 +52,14 @@ function Home() {
 						maintainability, and launch readiness.
 					</p>
 
+					{/* Links into gated routes use reloadDocument: only the Worker entry
+					    can answer them with a 302 to /login or a 403 gate page. A
+					    client-side hop rendered the gated page shell without that check. */}
 					<div className="hero-actions row">
 						{signedIn ? (
 							<Link
 								to="/projects"
+								reloadDocument
 								className="btn btn-primary"
 								onClick={() => trackEvent("home.projects")}
 							>
@@ -70,7 +74,7 @@ function Home() {
 								Sign in with Google
 							</Link>
 						)}
-						<Link to="/projects" className="btn" onClick={() => trackEvent("home.selected-work") }>
+						<Link to="/projects" reloadDocument className="btn" onClick={() => trackEvent("home.selected-work")}>
 							View selected work
 						</Link>
 						<a
@@ -111,12 +115,18 @@ function Home() {
 						quality signals, and owner curation.
 					</p>
 					<div className="hero-mini-feed">
-						{data?.topLanguages?.slice(0, 3).map((item) => (
-							<div key={item.name} className="mini-feed-row">
-								<span>{item.name}</span>
-								<strong>{item.count}</strong>
-							</div>
-						)) ?? <SkeletonLines count={3} />}
+						{loading ? (
+							<SkeletonLines count={3} />
+						) : data?.topLanguages.length ? (
+							data.topLanguages.slice(0, 3).map((item) => (
+								<div key={item.name} className="mini-feed-row">
+									<span>{item.name}</span>
+									<strong>{item.count}</strong>
+								</div>
+							))
+						) : (
+							<p className="dim">{error ? "Language stats are unavailable right now." : "Language stats appear after the first GitHub sync."}</p>
+						)}
 					</div>
 				</div>
 			</section>
@@ -148,7 +158,7 @@ function Home() {
 						<p className="eyebrow">Featured projects</p>
 						<h2>Premium case-study cards with health, tags, and launch signals</h2>
 					</div>
-					<Link to="/projects" className="btn btn-sm">
+					<Link to="/projects" reloadDocument className="btn btn-sm">
 						Open the project library
 					</Link>
 				</div>
@@ -171,7 +181,7 @@ function Home() {
 				{!loading && projects.length > 0 ? (
 					<div className="project-grid">
 						{projects.map((project) => (
-							<ProjectCard key={project.id} project={project} />
+							<ProjectCard key={project.id} project={project} reloadDocument />
 						))}
 					</div>
 				) : null}
@@ -191,14 +201,16 @@ function Home() {
 				<div className="glass-panel">
 					<p className="eyebrow">Top technologies</p>
 					<div className="pill-cloud">
-						{data?.topTopics.length ? (
+						{loading ? (
+							<SkeletonLines count={4} />
+						) : data?.topTopics.length ? (
 							data.topTopics.map((topic) => (
 								<span key={topic.name} className="tag-chip tag-chip-large">
 									{topic.name} <strong>{topic.count}</strong>
 								</span>
 							))
 						) : (
-							<SkeletonLines count={4} />
+							<p className="dim">{error ? "Technology tags are unavailable right now." : "Technology tags appear after the first GitHub sync."}</p>
 						)}
 					</div>
 				</div>

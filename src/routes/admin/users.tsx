@@ -15,7 +15,7 @@ function AdminUsers() {
 	const [roleFilter, setRoleFilter] = useState<"all" | "user" | "member" | "admin">("all");
 	const [busyId, setBusyId] = useState<string | null>(null);
 	const { toast, show, dismiss } = useToast();
-	const users = data?.users ?? [];
+	const users = useMemo(() => data?.users ?? [], [data]);
 
 	const visible = useMemo(() => {
 		const needle = search.trim().toLowerCase();
@@ -86,7 +86,14 @@ function AdminUsers() {
 						 for projects and <code>admin</code> for the dashboard.
 					</p>
 					<button type="button" className="btn btn-sm" onClick={refetch} disabled={loading}>
-						{loading ? <span className="spinner" /> : "Refresh"}
+						{loading ? (
+							<>
+								<span className="spinner" aria-hidden="true" />
+								<span className="sr-only">Refreshing…</span>
+							</>
+						) : (
+							"Refresh"
+						)}
 					</button>
 				</div>
 			</div>
@@ -152,6 +159,14 @@ function AdminUsers() {
 									<option value="user">user</option>
 									<option value="member">member</option>
 									<option value="admin">admin</option>
+									{/* A comma-separated or legacy role (e.g. "admin,member")
+									    matches none of the above; show it as-is instead of
+									    silently displaying "user". */}
+									{!isStandardRole(user.role) ? (
+										<option value={user.role ?? "user"} disabled>
+											{user.role}
+										</option>
+									) : null}
 								</select>
 							</label>
 							<div className="field-label">
@@ -187,8 +202,8 @@ function AdminUsers() {
 							<div className="user-access-log">
 								<strong>Recent access</strong>
 								<ul>
-									{user.recentAccess.map((entry) => (
-										<li key={entry}>{entry}</li>
+									{user.recentAccess.map((entry, index) => (
+										<li key={`${index}-${entry}`}>{entry}</li>
 									))}
 								</ul>
 							</div>
@@ -201,6 +216,10 @@ function AdminUsers() {
 			<Toast toast={toast} dismiss={dismiss} />
 		</div>
 	);
+}
+
+function isStandardRole(role: string | null): boolean {
+	return role === null || role === "user" || role === "member" || role === "admin";
 }
 
 function UserDetail({ label, value }: { label: string; value: string }) {

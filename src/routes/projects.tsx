@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { ProjectCard } from "../components/ProjectCard";
-import { getServerSession, type SessionUser } from "../lib/session-fn";
+import { loadSessionForRender, type SessionUser } from "../lib/session-fn";
 import {
 	DEFAULT_PROJECT_FILTERS,
 	collectFacets,
@@ -13,7 +13,7 @@ import { useApi } from "../lib/use-api";
 
 export const Route = createFileRoute("/projects")({
 	head: () => ({ meta: [{ title: "Projects — you.ge" }] }),
-	loader: safeLoader(async () => ({ session: await getServerSession() })),
+	loader: safeLoader(async () => ({ session: await loadSessionForRender() })),
 	component: Projects,
 });
 
@@ -21,7 +21,7 @@ function Projects() {
 	const { session } = Route.useLoaderData() as { session: SessionUser | null };
 	const { data, error, loading, refetch } = useApi<{ projects: PublicProject[] }>("/api/projects");
 	const [filters, setFilters] = useState<ProjectFilterState>(DEFAULT_PROJECT_FILTERS);
-	const projects = data?.projects ?? [];
+	const projects = useMemo(() => data?.projects ?? [], [data]);
 	const facets = useMemo(() => collectFacets(projects), [projects]);
 	const visible = useMemo(() => filterProjects(projects, filters), [projects, filters]);
 
@@ -33,7 +33,7 @@ function Projects() {
 					<h1>Discover the strongest repositories first</h1>
 					<p className="muted page-subtitle">
 						Sorted automatically by activity, quality signals, and editorial
-						priority. Signed in as {session?.email ?? "member"}.
+						priority.{session?.email ? ` Signed in as ${session.email}.` : null}
 					</p>
 				</div>
 				<div className="stat-strip">
@@ -131,11 +131,20 @@ function Projects() {
 					</label>
 				</div>
 				<div className="spread" style={{ marginTop: "1rem" }}>
-					<p className="muted" style={{ margin: 0 }}>
-						Showing {visible.length} of {projects.length} repositories.
+					<p className="muted" style={{ margin: 0 }} role="status">
+						{loading
+							? "Loading repositories…"
+							: `Showing ${visible.length} of ${projects.length} repositories.`}
 					</p>
 					<button type="button" className="btn btn-sm" onClick={refetch} disabled={loading}>
-						{loading ? <span className="spinner" /> : "Refresh"}
+						{loading ? (
+							<>
+								<span className="spinner" aria-hidden="true" />
+								<span className="sr-only">Refreshing…</span>
+							</>
+						) : (
+							"Refresh"
+						)}
 					</button>
 				</div>
 			</section>
@@ -168,7 +177,17 @@ function Projects() {
 				</div>
 			) : null}
 
-			{!loading && !error && visible.length === 0 ? (
+			{!loading && !error && projects.length === 0 ? (
+				<div className="glass-panel empty-state">
+					<strong>No projects yet.</strong>
+					<p className="muted">
+						The library fills automatically after the next GitHub sync — check
+						back soon.
+					</p>
+				</div>
+			) : null}
+
+			{!loading && !error && projects.length > 0 && visible.length === 0 ? (
 				<div className="glass-panel empty-state">
 					<strong>No projects match those filters.</strong>
 					<p className="muted">

@@ -40,7 +40,8 @@ export const requireSession = createMiddleware<AppContext>(async (c, next) => {
  * /api/auth/admin/* endpoint returns 403 while your own routes work — which
  * looks like a bug in better-auth but is not.
  *
- * Bootstrap the first admin with:  npm run auth:create-admin
+ * Bootstrap the first admin with:  npm run auth:grant-admin -- you@example.com
+ * (scripts/grant-admin.mjs — see README "Access model").
  */
 export const requireAdmin = createMiddleware<AppContext>(async (c, next) => {
 	const session = c.get("session");

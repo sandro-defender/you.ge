@@ -18,6 +18,23 @@ export async function registerAppServiceWorker(options: RegisterOptions = {}) {
 	return registration;
 }
 
+/**
+ * `controllerchange` handler: reload once when an UPDATED worker takes over.
+ *
+ * The very first install fires `controllerchange` too (the worker calls
+ * clients.claim()), so `hadController` — whether this page was already
+ * controlled when it loaded — tells an accepted update apart from a
+ * first-time visitor, whose page must not reload under them.
+ */
+export function createControllerChangeHandler(hadController: boolean, reload: () => void) {
+	let reloading = false;
+	return () => {
+		if (!hadController || reloading) return;
+		reloading = true;
+		reload();
+	};
+}
+
 function watchRegistration(
 	registration: ServiceWorkerRegistration,
 	onUpdateReady?: (registration: ServiceWorkerRegistration) => void,

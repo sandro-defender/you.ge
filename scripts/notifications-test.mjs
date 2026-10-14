@@ -4,7 +4,7 @@ import { audiencesForUser } from "../src/lib/notifications.ts";
 assert.deepEqual(
   audiencesForUser("u_1", "user"),
   ["user:u_1"],
-  "regular members should only receive their personal inbox audience",
+  "non-admin users should only receive their personal inbox audience",
 );
 
 assert.deepEqual(

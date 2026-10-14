@@ -4,7 +4,7 @@ import { relativeTimeLabel } from "../lib/repo-ranking";
 import type { PublicProjectDetail } from "../lib/types";
 import { useApi } from "../lib/use-api";
 
-export const Route = createFileRoute("/projects/$owner/$name")({
+export const Route = createFileRoute("/projects_/$owner/$name")({
 	head: () => ({ meta: [{ title: "Project detail — you.ge" }] }),
 	component: ProjectDetailPage,
 });
@@ -33,7 +33,7 @@ function ProjectDetailPage() {
 				</div>
 			) : null}
 
-			{loading || !project ? (
+			{loading && !project ? (
 				<div className="glass-panel project-detail-shell">
 					<div className="skeleton project-skeleton-media" />
 					<div className="skeleton" style={{ height: "2.1rem", marginTop: "1.2rem", width: "56%" }} />

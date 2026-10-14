@@ -31,7 +31,7 @@ function AdminRepos() {
 	const { data, error, loading, refetch } = useApi<{ repos: AdminRepo[] }>("/api/admin/repos");
 	const { data: syncData, refetch: refetchSync } = useApi<{ runs: SyncRun[] }>("/api/admin/sync-log");
 	const { toast, show, dismiss } = useToast();
-	const repos = data?.repos ?? [];
+	const repos = useMemo(() => data?.repos ?? [], [data]);
 	const [query, setQuery] = useState("");
 	const [selectedId, setSelectedId] = useState<number | null>(null);
 	const [form, setForm] = useState<RepoForm | null>(null);
@@ -50,10 +50,14 @@ function AdminRepos() {
 		return repos.find((repo) => repo.id === selectedId) ?? filtered[0] ?? repos[0] ?? null;
 	}, [selectedId, repos, filtered]);
 
+	// Reset the form only when a DIFFERENT repo becomes selected. Depending on
+	// the whole `selected` object would also reset it whenever the list is
+	// refetched (Sync now, Refresh), discarding unsaved edits.
 	useEffect(() => {
 		if (!selected) return;
 		setSelectedId(selected.id);
 		setForm(toForm(selected));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selected?.id]);
 
 	async function save() {
@@ -105,7 +109,14 @@ function AdminRepos() {
 				<div className="row">
 					<SyncNowButton onFinished={() => { refetch(); refetchSync(); }} label="Sync now" />
 					<button type="button" className="btn btn-sm" onClick={() => { refetch(); refetchSync(); }} disabled={loading}>
-						{loading ? <span className="spinner" /> : "Refresh data"}
+						{loading ? (
+							<>
+								<span className="spinner" aria-hidden="true" />
+								<span className="sr-only">Refreshing…</span>
+							</>
+						) : (
+							"Refresh data"
+						)}
 					</button>
 				</div>
 			</div>
@@ -117,7 +128,7 @@ function AdminRepos() {
 			) : null}
 
 			<div className="repo-layout">
-				<aside className="glass-panel repo-list-panel">
+				<section className="glass-panel repo-list-panel" aria-label="Repositories">
 					<div className="spread" style={{ marginBottom: "0.9rem" }}>
 						<h3 style={{ margin: 0 }}>Repositories</h3>
 						<span className="badge">{repos.length}</span>
@@ -135,6 +146,7 @@ function AdminRepos() {
 								key={repo.id}
 								type="button"
 								className={`repo-list-item ${selected?.id === repo.id ? "is-active" : ""}`}
+								aria-current={selected?.id === repo.id ? "true" : undefined}
 								onClick={() => {
 									setSelectedId(repo.id);
 									setForm(toForm(repo));
@@ -151,9 +163,9 @@ function AdminRepos() {
 							</button>
 						))}
 					</div>
-				</aside>
+				</section>
 
-				<section className="glass-panel repo-editor-panel">
+				<section className="glass-panel repo-editor-panel" aria-label="Repository editor">
 					{selected && form ? (
 						<>
 							<div className="spread" style={{ marginBottom: "1rem" }}>
@@ -165,7 +177,14 @@ function AdminRepos() {
 									</p>
 								</div>
 								<button type="button" className="btn btn-primary" onClick={() => void save()} disabled={saving}>
-									{saving ? <span className="spinner" /> : "Save changes"}
+									{saving ? (
+										<>
+											<span className="spinner" aria-hidden="true" />
+											<span className="sr-only">Saving…</span>
+										</>
+									) : (
+										"Save changes"
+									)}
 								</button>
 							</div>
 
@@ -276,7 +295,7 @@ function AdminRepos() {
 					)}
 				</section>
 
-				<aside className="glass-panel repo-sync-panel">
+				<section className="glass-panel repo-sync-panel" aria-label="Recent sync history">
 					<p className="eyebrow">Recent sync history</p>
 					<h3>Runs and rate-limit context</h3>
 					<ul className="timeline-list">
@@ -295,7 +314,7 @@ function AdminRepos() {
 							</li>
 						))}
 					</ul>
-				</aside>
+				</section>
 			</div>
 			<Toast toast={toast} dismiss={dismiss} />
 		</div>

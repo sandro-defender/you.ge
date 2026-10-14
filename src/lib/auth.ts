@@ -1,11 +1,12 @@
 import { betterAuth, APIError } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { eq, sql } from "drizzle-orm";
 import { admin } from "better-auth/plugins";
 import { createDb } from "./db";
 import { user as userTable } from "../db/schema";
+import { canChangeAdminState, countOtherActiveAdmins } from "./admin-guards";
 import { siteRoles } from "./auth-roles";
 import type { Env } from "./env";
+import { ADMIN_ROLES, hasRole } from "./roles";
 
 /**
  * better-auth factory.
@@ -100,7 +101,8 @@ export function createAuth(env: Env) {
 			 * GOTCHA: it has TWO authorization layers. Your own middleware check
 			 * AND better-auth's internal `user.role === "admin"` in the database
 			 * must BOTH pass, or admin endpoints return 403 with no obvious
-			 * reason. Bootstrap the first admin with `npm run auth:create-admin`
+			 * reason. Bootstrap the first admin with
+			 * `npm run auth:grant-admin -- you@example.com` (scripts/grant-admin.mjs)
 			 * rather than hand-editing rows.
 			 */
 			admin({
@@ -142,6 +144,13 @@ export function createAuth(env: Env) {
 		 * first job is to ignore everything that is not a role demotion. It
 		 * also covers /admin/update-user, which can set role too.
 		 *
+		 * Role strings may be comma-separated ("admin,member": setRole joins
+		 * arrays with ","), so the decision is the shared, unit-tested
+		 * canChangeAdminState() from ./admin-guards — the same guard that
+		 * PATCH /api/admin/users/:id uses. Exact `=== "admin"` checks here
+		 * used to block set-role ["admin","member"] on the only admin and let
+		 * an "admin,member" sole admin demote themselves.
+		 *
 		 * Fail-open only when the target id cannot be determined (no endpoint
 		 * context / body.userId) — those flows are not HTTP admin calls, and
 		 * grant-admin.mjs writes SQL directly, bypassing hooks entirely (that
@@ -152,10 +161,11 @@ export function createAuth(env: Env) {
 				update: {
 					before: async (data, context) => {
 						const newRole = (data as { role?: unknown }).role;
-						// Only role demotions FROM admin are guarded. A promotion to
-						// admin, a ban (banned/banReason fields), name update, etc.
-						// pass straight through.
-						if (typeof newRole !== "string" || newRole === "admin") return;
+						// Only changes that REMOVE the admin role are guarded. A
+						// promotion, a role that still includes admin, a ban
+						// (banned/banReason fields), a name update, etc. pass
+						// straight through.
+						if (typeof newRole !== "string" || hasRole(newRole, ADMIN_ROLES)) return;
 
 						const body = (
 							context as { body?: unknown } | null | undefined
@@ -163,19 +173,21 @@ export function createAuth(env: Env) {
 						const targetId = typeof body?.userId === "string" ? body.userId : null;
 						if (!targetId) return;
 
-						const target = await db
-							.select({ role: userTable.role })
-							.from(userTable)
-							.where(eq(userTable.id, targetId))
-							.limit(1);
-						if (target[0]?.role !== "admin") return; // not an admin demotion
+						// One small read: the user table holds a handful of rows.
+						const rows = await db
+							.select({ id: userTable.id, role: userTable.role, banned: userTable.banned })
+							.from(userTable);
+						const target = rows.find((row) => row.id === targetId);
+						if (!target) return;
 
-						const counted = await db
-							.select({ admins: sql<number>`count(*)` })
-							.from(userTable)
-							.where(eq(userTable.role, "admin"));
-
-						if (Number(counted[0]?.admins ?? 0) > 1) return; // another admin remains
+						const verdict = canChangeAdminState({
+							currentRole: target.role,
+							currentBanned: Boolean(target.banned),
+							nextRole: newRole,
+							nextBanned: Boolean(target.banned),
+							remainingOtherAdmins: countOtherActiveAdmins(rows, targetId),
+						});
+						if (verdict.ok) return; // not an admin, or another active admin remains
 
 						throw new APIError("BAD_REQUEST", {
 							message:

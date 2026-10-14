@@ -1,4 +1,9 @@
-const VERSION = "youge-v2";
+// Update flow: a new worker installs, then WAITS. ClientRuntime shows an
+// "Update ready" banner and posts SKIP_WAITING only when the user clicks
+// "Reload now" — never skip waiting during install, or every deploy would
+// activate at once and reload open tabs without consent.
+// Bump VERSION whenever caching rules change so activate purges old caches.
+const VERSION = "youge-v3";
 const STATIC_CACHE = `${VERSION}-static`;
 const SHELL_CACHE = `${VERSION}-shell`;
 const SHELL_URLS = [
@@ -17,7 +22,7 @@ const SHELL_URLS = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL_URLS)));
 });
 
 self.addEventListener("activate", (event) => {
@@ -55,7 +60,8 @@ async function networkFirst(request) {
   const cache = await caches.open(SHELL_CACHE);
   try {
     const response = await fetch(request);
-    cache.put(request, response.clone());
+    // Only successful pages become the offline copy — never a 404/5xx.
+    if (response.ok) cache.put(request, response.clone());
     return response;
   } catch {
     return (await cache.match(request)) || (await cache.match("/offline.html"));

@@ -1,5 +1,9 @@
 import assert from "node:assert/strict";
-import { registerAppServiceWorker, shouldRegisterServiceWorker } from "../src/lib/pwa.ts";
+import {
+  createControllerChangeHandler,
+  registerAppServiceWorker,
+  shouldRegisterServiceWorker,
+} from "../src/lib/pwa.ts";
 
 const realNavigator = globalThis.navigator;
 const realLocation = globalThis.location;
@@ -46,5 +50,23 @@ assert.equal(typeof listeners.get("updatefound"), "function", "registration shou
 
 Object.defineProperty(globalThis, "navigator", { configurable: true, value: realNavigator });
 Object.defineProperty(globalThis, "location", { configurable: true, value: realLocation });
+
+// The FIRST install also fires `controllerchange` (the worker calls
+// clients.claim()), so an unconditional reload yanked every first-time
+// visitor's page out from under them a moment after it loaded.
+let reloads = 0;
+const firstInstall = createControllerChangeHandler(false, () => {
+  reloads += 1;
+});
+firstInstall();
+firstInstall();
+assert.equal(reloads, 0, "a page that had no controller must not reload when the first worker claims it");
+
+const update = createControllerChangeHandler(true, () => {
+  reloads += 1;
+});
+update();
+update();
+assert.equal(reloads, 1, "an accepted update reloads exactly once");
 
 console.log("service worker registration tests passed");
