@@ -9,28 +9,28 @@ export const Route = createRootRoute({
 		meta: [
 			{ charSet: "utf-8" },
 			{ name: "viewport", content: "width=device-width, initial-scale=1" },
-			{ title: "you.ge" },
+			{ title: "you.ge — projects, links & notes" },
 			{
 				name: "description",
 				content:
-					"Premium developer portfolio for Sandro — product-minded engineering, curated GitHub work, and a private client showcase.",
+					"A personal catalogue of Sandro's projects, useful links, and the notes behind the work.",
 			},
 			{ name: "robots", content: "noindex, nofollow" },
 			{ name: "color-scheme", content: "dark" },
 			{ name: "theme-color", content: "#0a0914" },
 			{ property: "og:site_name", content: "you.ge" },
 			{ property: "og:type", content: "website" },
-			{ property: "og:title", content: "you.ge" },
+			{ property: "og:title", content: "you.ge — projects, links & notes" },
 			{
 				property: "og:description",
 				content:
-					"Premium developer portfolio for Sandro — product-minded engineering, curated GitHub work, and a private client showcase.",
+					"A personal catalogue of projects, useful links, and the notes behind the work.",
 			},
 			{ property: "og:url", content: "https://you.ge/" },
 			{ property: "og:image", content: "https://you.ge/og-image.jpg" },
 			{ property: "og:image:width", content: "1200" },
 			{ property: "og:image:height", content: "630" },
-			{ property: "og:image:alt", content: "you.ge — premium developer portfolio" },
+			{ property: "og:image:alt", content: "you.ge — projects, links, and field notes" },
 			{ name: "twitter:card", content: "summary_large_image" },
 			{ name: "twitter:image", content: "https://you.ge/og-image.jpg" },
 		],
@@ -69,8 +69,8 @@ function RootComponent() {
 					<div>
 						<strong>you.ge</strong>
 						<p>
-							A private-first portfolio powered by TanStack Start, Hono,
-							better-auth, Cloudflare Workers, D1, and curated GitHub data.
+							A personal index of projects, useful links, and the notes behind
+						the work — kept close, curated over time.
 						</p>
 					</div>
 					<div className="site-footer-links">

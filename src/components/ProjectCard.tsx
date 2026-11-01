@@ -77,7 +77,7 @@ export function ProjectCard({
 
 				<div className="row project-actions">
 					<Link {...linkProps} className="btn btn-sm btn-primary">
-						Read case study
+						Read project notes
 					</Link>
 					<a className="btn btn-sm" href={project.url} target="_blank" rel="noreferrer noopener">
 						GitHub ↗

@@ -12,7 +12,7 @@ import type { ProjectFilterState, PublicProject } from "../lib/types";
 import { useApi } from "../lib/use-api";
 
 export const Route = createFileRoute("/projects")({
-	head: () => ({ meta: [{ title: "Projects — you.ge" }] }),
+	head: () => ({ meta: [{ title: "Project archive — you.ge" }] }),
 	loader: safeLoader(async () => ({ session: await loadSessionForRender() })),
 	component: Projects,
 });
@@ -26,14 +26,14 @@ function Projects() {
 	const visible = useMemo(() => filterProjects(projects, filters), [projects, filters]);
 
 	return (
-		<div className="page-stack">
-			<section className="page-header">
+		<div className="page-stack archive-page">
+			<section className="page-header archive-header">
 				<div>
-					<p className="eyebrow">Project library</p>
-					<h1>Discover the strongest repositories first</h1>
+					<p className="archive-kicker">PROJECT LIBRARY <span>/</span> MEMBER ARCHIVE</p>
+					<h1>The full project archive.</h1>
 					<p className="muted page-subtitle">
-						Sorted automatically by activity, quality signals, and editorial
-						priority.{session?.email ? ` Signed in as ${session.email}.` : null}
+						A searchable shelf of builds and links, with notes attached to each
+						project. Sorted by curation and recent activity.{session?.email ? ` Signed in as ${session.email}.` : null}
 					</p>
 				</div>
 				<div className="stat-strip">
@@ -50,7 +50,7 @@ function Projects() {
 						<input
 							className="input"
 							type="search"
-							placeholder="Search projects, tags, or categories…"
+							placeholder="Search projects, tools, or categories…"
 							value={filters.search}
 							onChange={(event) =>
 								setFilters((current) => ({ ...current, search: event.target.value }))

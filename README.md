@@ -1,9 +1,10 @@
-# you.ge — gated portfolio
+# you.ge — project index & notes catalogue
 
-A modern, permission-gated portfolio for **you.ge**, deployed as a **single
-Cloudflare Worker on the Free plan with D1 only**. It shows the owner's GitHub
-projects (synced into D1 on a cron), requires **Google OAuth sign-in**, and has
-an **admin panel** where you grant per-user access.
+A private-first project catalogue for **you.ge**, deployed as a **single
+Cloudflare Worker on the Free plan with D1 only**. The public homepage curates
+projects and links; approved members can explore the full archive and its
+project notes. GitHub repositories sync into D1 on a cron, and an **admin
+panel** manages curation and per-user access.
 
 **Stack:** TanStack Start (React SSR) · Hono (`/api/*`) · better-auth 1.7.5
 (Google OAuth, RBAC, admin plugin) · Drizzle ORM · D1 · `@cloudflare/vite-plugin`.

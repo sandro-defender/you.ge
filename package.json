@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Gated portfolio for you.ge \u2014 TanStack Start + Hono + better-auth + D1 on Cloudflare Workers Free",
+  "description": "Private-first project, links, and notes catalogue for you.ge \u2014 TanStack Start + Hono + better-auth + D1 on Cloudflare Workers Free",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
