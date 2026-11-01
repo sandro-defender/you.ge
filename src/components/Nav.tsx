@@ -71,8 +71,8 @@ export function Nav() {
 	// client-side hop rendered the gated page shell without that check.
 	const links = useMemo(
 		() => [
-			{ to: "/", label: "Home", show: true, gated: false },
-			{ to: "/projects", label: "Projects", show: Boolean(userId), gated: true },
+			{ to: "/", label: "Index", show: true, gated: false },
+			{ to: "/projects", label: "Archive", show: Boolean(userId), gated: true },
 			{ to: "/notifications", label: "Inbox", show: Boolean(userId), gated: true, badge: unread },
 			{ to: "/settings", label: "Settings", show: Boolean(userId), gated: true },
 			{ to: "/admin", label: "Admin", show: isAdmin, gated: true },

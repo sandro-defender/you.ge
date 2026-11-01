@@ -1,7 +1,7 @@
 {
   "name": "you.ge",
   "short_name": "you.ge",
-  "description": "Premium developer portfolio and private project showcase.",
+  "description": "A personal catalogue of projects, useful links, and private project notes.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#060711",
