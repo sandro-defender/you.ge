@@ -31,7 +31,8 @@
     "test:api-url": "node scripts/api-url-test.mjs",
     "test": "npm run test:ranking && npm run test:admin && npm run test:notifications && npm run test:pwa && npm run test:sync-batching && npm run test:public-home && npm run test:service-worker && npm run test:api-url",
     "typecheck": "tsc --noEmit",
-    "deploy:dry": "vite build && wrangler deploy -c dist/server/wrangler.json --dry-run"
+    "deploy:dry": "vite build && wrangler deploy -c dist/server/wrangler.json --dry-run",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "@tanstack/react-router": "^1.170.38",
@@ -39,11 +40,13 @@
     "better-auth": "^1.7.5",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.8",
+    "ogl": "^1.0.11",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.57.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^26.6.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

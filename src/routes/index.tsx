@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { CatalogProjectCard } from "../components/CatalogProjectCard";
+import { ElectricLogo } from "../components/ElectricLogo";
 import { InlineIcon } from "../components/InlineIcon";
 import { useAuthSession } from "../lib/auth-client";
 import { trackEvent } from "../lib/analytics";
@@ -136,9 +137,26 @@ function Home() {
 				<div className="catalog-hero-visual" aria-label="A visual index of projects, links and notes">
 					<div className="catalog-orbit catalog-orbit-outer" aria-hidden="true" />
 					<div className="catalog-orbit catalog-orbit-inner" aria-hidden="true" />
-					<div className="catalog-orbit-core" aria-hidden="true">
-						<span>you</span><strong>.</strong><span>ge</span>
-					</div>
+				<div className="catalog-electric-stage" aria-hidden="true">
+					<ElectricLogo
+						src="/logo.svg"
+						color="#f0eaff"
+						glowColor="#8a76ff"
+						scale={0.72}
+						thickness={1.6}
+						strands={4}
+						bend={0.6}
+						crackle={1.2}
+						arcs={1}
+						flicker={0.6}
+						fill={0.4}
+						speed={2.2}
+						interactive
+						cursorIntensity={0.6}
+						cursorRadius={90}
+						theme="dark"
+					/>
+				</div>
 					<div className="catalog-float-chip catalog-float-projects">
 						<span className="catalog-float-icon"><InlineIcon name="folder" size={17} /></span>
 						<span><strong>Projects</strong><small>Things in motion</small></span>
